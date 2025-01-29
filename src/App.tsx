@@ -6,7 +6,7 @@ import { decode } from 'light-bolt11-decoder';
 
 import {Button, PayButton,requestProvider, init} from '@getalby/bitcoin-connect-react';
 
-import WebApp from '@twa-dev/sdk'
+import WebApp from '@twa-dev/sdk';
 
 const App = () => {
   const [tonConnectUI] = useTonConnectUI();
@@ -35,7 +35,13 @@ const App = () => {
     init({
       appName: "LnTgBTCSwap", // your app name
     })
+    WebApp.ready();
+    console.log("Telegram Web App is ready!");
 
+    WebApp.onEvent('popup_closed', () => {
+        console.log("popup_closed event triggered. WebApp.data:", WebApp.data);
+        // ... (handle data from bot)
+    });
   },[]);
   useEffect(() => {
     if (wallet) {
@@ -45,14 +51,12 @@ const App = () => {
   }, [wallet]);
 
 
-  const sendData = () => {
-    if (WebApp) {
+  const sendData = async () => {
+    if (WebApp.isActive) {
       console.log(WebApp)
-      WebApp.ready();
       WebApp.sendData(JSON.stringify({
         action: "connection"
       }));
-      alert("data sent")
     } else {
       alert("Telegram Web App is not available.");
     }
