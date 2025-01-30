@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import { useSearchParams } from 'react-router-dom';
+
 import "./App.css";
 import { TonConnectButton, useTonWallet, useTonConnectUI } from "@tonconnect/ui-react";
 import { TONXJsonRpcProvider } from "@tonx/core";
@@ -10,6 +12,7 @@ import WebApp from '@twa-dev/sdk';
 
 const App = () => {
   const [tonConnectUI] = useTonConnectUI();
+  const [searchParams] = useSearchParams();
   const wallet = useTonWallet();
   const client = new TONXJsonRpcProvider({
     network: "testnet",
@@ -38,10 +41,19 @@ const App = () => {
     WebApp.ready();
     console.log("Telegram Web App is ready!");
 
-    WebApp.onEvent('popup_closed', () => {
-        console.log("popup_closed event triggered. WebApp.data:", WebApp.data);
-        // ... (handle data from bot)
-    });
+    const initData = searchParams.get('params');
+    if (initData) {
+      try {
+        const data = JSON.parse(decodeURIComponent(initData)); // If you used JSON.stringify() on the bot side
+        console.log("Data received from bot:", data);
+        alert(data.name);
+        // Use the data in your Web App
+      } catch (error) {
+        console.error("Error parsing initData:", error);
+      }
+    } else {
+      console.log("No initial data received.");
+    }
   },[]);
   useEffect(() => {
     if (wallet) {
@@ -55,7 +67,10 @@ const App = () => {
     if (WebApp.isActive) {
       console.log(WebApp)
       WebApp.sendData(JSON.stringify({
-        action: "connection"
+        action: "post_swap",
+        source: 'TON',
+        destination: 'Lightning',
+        amount: transferAmount, // in satoshis
       }));
     } else {
       alert("Telegram Web App is not available.");
