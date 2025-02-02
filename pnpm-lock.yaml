@@ -32,6 +32,9 @@ importers:
       buffer:
         specifier: ^6.0.3
         version: 6.0.3
+      crypto:
+        specifier: ^1.0.1
+        version: 1.0.1
       light-bolt11-decoder:
         specifier: ^3.2.0
         version: 3.2.0
@@ -44,6 +47,9 @@ importers:
       react-router-dom:
         specifier: ^7.1.3
         version: 7.1.3(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      ton-core:
+        specifier: ^0.53.0
+        version: 0.53.0(ton-crypto@3.2.0)
       vite-plugin-node-polyfills:
         specifier: ^0.22.0
         version: 0.22.0(rollup@4.31.0)(vite@5.4.14(@types/node@22.10.10))
@@ -942,6 +948,10 @@ packages:
 
   crypto-js@4.2.0:
     resolution: {integrity: sha512-KALDyEYgpY+Rlob/iriUtjV6d5Eq+Y191A5g4UqLAi8CyGP9N1+FdVbkc1SxKc2r4YAYqG8JzO2KGL+AizD70Q==}
+
+  crypto@1.0.1:
+    resolution: {integrity: sha512-VxBKmeNcqQdiUQUW2Tzq0t377b54N2bMtXO/qiLa+6eRRmmC4qT3D4OnTGoT/U6O9aklQ/jTwbOtRMTTY8G0Ig==}
+    deprecated: This package is no longer supported. It's now a built-in Node module. If you've depended on crypto, you should switch to the one that's built-in.
 
   cssesc@3.0.0:
     resolution: {integrity: sha512-/Tb/JcjK111nNScGob5MNtsntNM1aCNUDipB/TkwZFhyDrrE47SOx/18wF2bbjgc3ZzCSKW1T5nt5EbFoAz/Vg==}
@@ -1889,6 +1899,17 @@ packages:
   to-regex-range@5.0.1:
     resolution: {integrity: sha512-65P7iz6X5yEr1cwcgvQxbbIw7Uk3gOy5dIdtZ4rDveLqhrdJP+Li/Hx6tyK0NEb+2GCyneCMJiGqrADCSNk8sQ==}
     engines: {node: '>=8.0'}
+
+  ton-core@0.53.0:
+    resolution: {integrity: sha512-uO/U1oVLdEliWWbwfNQQK+61C+KM0ehcTdHQ6cN0WSEH2UzGfdVFpC4Wb0ph+wUYe/5njl7TA0uL9nif9Q6qwA==}
+    peerDependencies:
+      ton-crypto: '>=3.2.0'
+
+  ton-crypto-primitives@2.0.0:
+    resolution: {integrity: sha512-K+qKjpS0h9sPW6oExcpxnzuQ7nEgHEiDKwIqE/jWD25o8iFGe3FWj1gKxFNbKE9wwYKc5IV8FwrU+raF0KO5nQ==}
+
+  ton-crypto@3.2.0:
+    resolution: {integrity: sha512-fltdBNQ45gARMuGMEOjPZWPJ5eSql8p3CA0Dj7tPv5lhU5ziT8SxXLAzDraR9HJ8YpjBHLVvYyhMLRiEwxgtMQ==}
 
   tr46@0.0.3:
     resolution: {integrity: sha512-N3WMsuqV66lT30CrXNbEjx4GEwlow3v6rr4mCcv6prnfwhS01rkgyFdjPNBYd9br7LpXV1+Emh01fHnq2Gdgrw==}
@@ -2986,6 +3007,8 @@ snapshots:
 
   crypto-js@4.2.0: {}
 
+  crypto@1.0.1: {}
+
   cssesc@3.0.0: {}
 
   csstype@3.1.3: {}
@@ -4008,6 +4031,21 @@ snapshots:
   to-regex-range@5.0.1:
     dependencies:
       is-number: 7.0.0
+
+  ton-core@0.53.0(ton-crypto@3.2.0):
+    dependencies:
+      symbol.inspect: 1.0.1
+      ton-crypto: 3.2.0
+
+  ton-crypto-primitives@2.0.0:
+    dependencies:
+      jssha: 3.2.0
+
+  ton-crypto@3.2.0:
+    dependencies:
+      jssha: 3.2.0
+      ton-crypto-primitives: 2.0.0
+      tweetnacl: 1.0.3
 
   tr46@0.0.3: {}
 
