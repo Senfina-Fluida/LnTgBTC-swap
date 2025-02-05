@@ -43,6 +43,7 @@ const SwapRequest = () => {
       source: to === "Lightning" ? "TON" : "Lightning",
       destination: to,
       amount: parseFloat(amount),
+      action: "post_swap"
     };
 
     console.log("Swap Request:", swapRequest);
@@ -90,7 +91,7 @@ const SwapRequest = () => {
         <div className="input-container"> {/* Wrapped inputs in input-container */}
           <label htmlFor="amount" className="block text-sm font-medium text-white-700 mb-1">Amount:</label>
           <input
-            type="number"
+            type="text"
             id="amount"
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
