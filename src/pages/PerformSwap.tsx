@@ -4,7 +4,7 @@ import { TonConnectButton, useTonWallet, useTonConnectUI } from "@tonconnect/ui-
 import { TONXJsonRpcProvider } from "@tonx/core";
 import { decode } from 'light-bolt11-decoder';
 import crypto from 'crypto';
-import { beginCell, Address, SendMode, contractAddress } from "ton-core"; // Import Address and Cell
+import { beginCell, Address, SendMode, toNano } from "ton-core"; // Import Address and Cell
 
 import {Button, PayButton,requestProvider, init} from '@getalby/bitcoin-connect-react';
 
@@ -73,36 +73,48 @@ export default function PerformSwap() {
     }
   },[wallet]);
   
-  const createSwapPayload = (recipient, amount, hashLock, timeLock) => {
+  const createSwapPayload = (initiator, amount, hashLock, timeLock) => {
     // Create a new cell
     const OP_CREATE_SWAP = 305419896n; // 0x12345678
-
     const cell = beginCell()
-      .storeUint(OP_CREATE_SWAP, 32)
-      .storeAddress(recipient) // Store recipient address
-      .storeAddress(recipient) // Store recipient address
-
-      .storeCoins(BigInt(amount)) // Store amount (in nano-tokens)
-      .storeUint(BigInt(hashLock), 256) // Store hashLock (256-bit integer)
-      .storeUint(BigInt(timeLock), 64) // Store timeLock (64-bit integer)
-      .endCell();
-  
+    .storeUint(OP_CREATE_SWAP, 32)
+    .storeAddress(initiator)          // Explicitly store the sender’s address
+    .storeCoins(BigInt(amount))             // Store coins (using TON’s special encoding)
+    .storeRef(                          // Extra data stored in a referenced cell:
+      beginCell()
+        .storeUint(BigInt(hashLock), 256)   // 256-bit hashLock
+        .storeUint(BigInt(timeLock), 64)    // 64-bit timeLock
+        .endCell()
+    )
+    .endCell()
     // Convert the cell to a base64-encoded string
     return cell.toBoc().toString("base64");
   };
-  const createCompleteSwapPayload = (swapId, preimage) => {
+  const createCompleteSwapPayload = (swapId, preimageCell) => {
     // Create a new cell
     const OP_COMPLETE_SWAP = 2271560481n; // 0x87654321
-
+    console.log(BigInt(swapId));
     const cell = beginCell()
       .storeUint(OP_COMPLETE_SWAP, 32)
       .storeUint(BigInt(swapId),256)
-      .storeUint(preimage,256)
+      .storeRef(preimageCell) // Store the cell as a reference
       .endCell();
   
     // Convert the cell to a base64-encoded string
     return cell.toBoc().toString("base64");
   };
+  const bufferToBigInt = (buffer: Buffer): bigint => {
+    let result = 0n;
+    for (const byte of buffer) {
+        result = (result << 8n) | BigInt(byte);
+    }
+    return result;
+}
+const computeHashLock = (preimage): bigint => {
+  const cell = beginCell().storeBuffer(preimage).endCell();
+  const hashBuffer = cell.hash(); // Buffer
+  return bufferToBigInt(hashBuffer);
+}
   const lockTgBTC = async () => {
     if(!lnToTgDecodedInvoice){
       console.log("No Invoice");
@@ -111,8 +123,11 @@ export default function PerformSwap() {
     const initiator = wallet?.account.address;
 
     try {
+      console.log("HashLock: "+lnToTgDecodedInvoice.payment_hash)
       const hashLockBigInt = BigInt("0x" + lnToTgDecodedInvoice.payment_hash);
-      const timeLockBigInt = BigInt(Math.floor(Date.now() / 1000)) + BigInt(lnToTgDecodedInvoice.expiry);
+      //const hashLockBigInt = computeHashLock(preimageBigInt)
+      console.log("Hashlock BigInt: "+hashLockBigInt)
+      const timeLockBigInt = BigInt(Math.floor(Date.now() / 1000)) + 3600n// BigInt(lnToTgDecodedInvoice.expiry);
       const payload = createSwapPayload(
           Address.parse(initiator),
           Number(lnToTgDecodedInvoice.sections[2].value)/1000,
@@ -124,7 +139,7 @@ export default function PerformSwap() {
         {
           address: contractAddress,
           payload: payload,
-          amount: "3000000"
+          amount: toNano(0.05).toString()
         },
       ];
       console.log(messages[0])
@@ -136,7 +151,6 @@ export default function PerformSwap() {
       };
 
       console.log("Swap Request:", swapLock);
-
       WebApp.sendData(JSON.stringify(swapLock));
       console.log(tonConnectUI.sendTransaction)
       await tonConnectUI.sendTransaction({
@@ -154,19 +168,21 @@ export default function PerformSwap() {
       console.error("Error calling contract function:", error);
     }
   };
-  const completeSwap = async (preimage: Number) => {
+  const completeSwap = async (preimage) => {
     const contractAddress = import.meta.env.VITE_CONTRACT_ADDRESS;
-
     try {
-
+      const preimageBuffer = Buffer.from(preimage, 'hex');
+      const preimageCell = beginCell().storeBuffer(preimageBuffer).endCell(); // Store in a cell
+  
       const payload = createCompleteSwapPayload(
-          11, //test
-          preimage
+          6, //test
+          preimageCell
       ); 
+      console.log(payload)
       const messages = [
         {
           address: contractAddress,
-          amount: "15500000", // Gas
+          amount: toNano(0.05).toString(), // Gas
           payload: payload,
         },
       ];
@@ -284,9 +300,10 @@ export default function PerformSwap() {
                   */
                   const computedHash = crypto.createHash('sha256').update(Buffer.from(response.preimage, 'hex')).digest('hex');
                   const preimageBigInt = BigInt("0x" + response.preimage);
+
                   setPreimage(response.preimage);
 
-                  completeSwap(preimageBigInt);
+                  completeSwap("0x" + response.preimage);
                 }} 
               />
             {
@@ -297,12 +314,21 @@ export default function PerformSwap() {
                     Select the amount available in the smart contract and pays it, release payment at TON
                     after
                   */
+                 console.log("Preimage: "+preimage)
                   const computedHash = crypto.createHash('sha256').update(Buffer.from(preimage, 'hex')).digest('hex');
                   console.log("Computed Hash: "+computedHash)
+                  console.log("Computed BigInt: "+BigInt('0x'+computedHash))
+
                   const decoded = decode(swap.invoice);
                   console.log("Payment Hash: "+decoded.payment_hash);
                   const preimageBigInt = BigInt('0x'+preimage);
-                  completeSwap(preimageBigInt);
+                  console.log("Preimage BigInt: "+preimageBigInt)
+                  console.log("Buffer to BigInt: "+bufferToBigInt(Buffer.from(preimage, 'hex')))
+                  console.log("Computed hashlock using function with cell: "+computeHashLock(Buffer.from(preimage, 'hex')))
+                  const hashBuffer = crypto.createHash('sha256').update(Buffer.from(preimage, 'hex')).digest(); // Use Node's crypto for ton-core compatible hash
+                  console.log(hashBuffer.toString('hex'))
+                  
+                  completeSwap('0x'+preimage);
               }}
               className={`button ${loading ? "loading" : ""}`}
                 >
