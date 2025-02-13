@@ -58,16 +58,16 @@ const SwapRequest = () => {
     }
   };
   const handleSwapSelect = (swap) => {
-    if (!amount || isNaN(amount) || parseFloat(amount) <= 0) {
-      alert("Please enter a valid amount.");
+    if (!swap.amount || isNaN(swap.amount) || parseFloat(swap.amount) <= 0) {
+      alert("Invalid Swap");
       return;
     }
 
     setIsLoading(true);
 
     const swapSelect = {
-      swapId: swap.id,
-      type:"selection"
+      swapId: swap._id,
+      action:"select_swap"
     };
 
     console.log("Swap Select:", swapSelect);
@@ -123,7 +123,15 @@ const SwapRequest = () => {
         <span className="text-gray-500">OR</span>
       </div>
       <div className="card">
-          <SwapsTable title="All Pending Swaps" swaps={pendingSwaps} loading={false} error={false} />
+          <SwapsTable 
+            title="All Pending Swaps"
+            swaps={pendingSwaps.filter(swap => {
+              return swap.destination !== to // && (swap.amount <= amount)
+            })}
+            loading={false} 
+            error={false} 
+            handleSwapSelect={handleSwapSelect}
+          />
       </div>
     </div>
   );

@@ -123,6 +123,7 @@ export default function PerformSwap() {
       console.log("No Invoice");
       return;
     }
+
     const initiator = wallet?.account.address;
 
     try {
@@ -150,17 +151,19 @@ export default function PerformSwap() {
         validUntil: Math.floor(Date.now() / 1000) + 60,
         messages: messages,
       });
-
       console.log("Contract function called successfully");
+
       // Send message to bot 
       const swapLock = {
-        _id: swap._id,
+        swapId: swap._id,
         action: "swap_locked",
         invoice: lnToTgDecodedInvoice.paymentRequest
       };
 
       console.log("Swap Request:", swapLock);
       WebApp.sendData(JSON.stringify(swapLock));
+
+      console.log("Message sent to bot");
 
     } catch (error) {
       console.error("Error calling contract function:", error);
