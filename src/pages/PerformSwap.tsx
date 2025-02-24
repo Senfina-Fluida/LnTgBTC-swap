@@ -9,6 +9,8 @@ import { beginCell, Address, SendMode, toNano } from "ton-core"; // Import Addre
 import {Button, PayButton,requestProvider, init} from '@getalby/bitcoin-connect-react';
 
 import WebApp from '@twa-dev/sdk';
+import { TonClient, JettonMaster } from "@ton/ton";
+
 const JETTON_QUANTITY = 100000000;
 
 export default function PerformSwap() {
@@ -26,7 +28,6 @@ export default function PerformSwap() {
     network: "testnet",
     apiKey: import.meta.env.VITE_TONXAPI_KEY,
   });
-
   const [tgBtcBalance,setTgBtcBalance] = useState(0);
   const [lnProvider, setLnProvider] = useState();
 
@@ -41,7 +42,6 @@ export default function PerformSwap() {
     WebApp.ready();
     
     const params = searchParams.get('params');
-
     if (params) {
       try {
         const decodedParams = decodeURIComponent(params);
@@ -74,7 +74,7 @@ export default function PerformSwap() {
   },[wallet]);
   
   const createSwapPayload = (initiator, amount, hashLock, timeLock) => {
-    // Create a new cell
+    /* Create a new cell
     const OP_CREATE_SWAP = 305419896n; // 0x12345678
     const cell = beginCell()
     .storeUint(OP_CREATE_SWAP, 32)
@@ -88,6 +88,45 @@ export default function PerformSwap() {
     )
     .endCell()
     // Convert the cell to a base64-encoded string
+    return cell.toBoc().toString("base64");
+    */
+
+    // Build an extra cell for hashLock and timeLock.
+    const jettonWalletAddress = Address.parse("kQDFnS37JDFpTI5dg84f5F4hhviz1hIuRck7sBe4itqSaRT2");
+
+    const OP_DEPOSIT_NOTIFICATION = 0xDEADBEEFn
+
+    const extraCell = beginCell()
+      .storeUint(hashLock, 256)
+      .storeUint(timeLock, 64)
+      .endCell();
+    // Build the deposit notification payload.
+    const forwardPayload = beginCell()
+      .storeUint(OP_DEPOSIT_NOTIFICATION, 32)  // deposit notification op code (0xDEADBEEF)
+      .storeUint(toNano(amount/10**8), 128)
+      .storeAddress(initiator)
+      .storeRef(
+        beginCell()
+          .storeAddress(initiator)
+          .endCell()
+      )
+      // Instead of storing hashLock/timeLock inline, store a reference to the extra cell.
+      .storeRef(extraCell)
+      .endCell();
+
+    // Then, create the transfer message.
+    const cell = beginCell()
+      .storeUint(0x0f8a7ea5, 32)           // transfer op code for jetton transfer
+      .storeUint(0, 64)                    // query_id
+      .storeCoins(toNano(amount/10**8))             // token amount for transfer
+      .storeAddress(Address.parse(contractAddress))         // destination
+      .storeAddress(Address.parse(contractAddress))         // response destination (ensure this is correct for your use case)
+      .storeBit(0)                         // custom payload flag (0 = none)
+      .storeCoins(toNano("0.02"))        // forward TON amount
+      .storeBit(1)                         // forward payload flag (1 = referenced cell)
+      .storeRef(forwardPayload)            // attach the forward payload
+      .endCell();
+
     return cell.toBoc().toString("base64");
   };
   const createCompleteSwapPayload = (swapId, preimageBigInt) => {
@@ -134,16 +173,19 @@ export default function PerformSwap() {
       console.log(timeLockBigInt)
       const payload = createSwapPayload(
           Address.parse(initiator),
-          11000n,
+          swap?.amount,
           hashLockBigInt, // Use the BigInt version
           timeLockBigInt
       ); // Use the BigInt version
       console.log(payload)
+      const jettonWalletAddress = "kQDFnS37JDFpTI5dg84f5F4hhviz1hIuRck7sBe4itqSaRT2"
+
       const messages = [
         {
-          address: contractAddress,
+          address: jettonWalletAddress,
           payload: payload,
-          amount: toNano('0.005').toString()
+          amount: toNano('0.1').toString(),
+          sendMode:  SendMode.PAY_GAS_SEPARATELY
         },
       ];
 
@@ -171,6 +213,17 @@ export default function PerformSwap() {
   };
   const completeSwap = async (preimageInput) => {
     const contractAddress = import.meta.env.VITE_CONTRACT_ADDRESS;
+    /*const jettonMasterAddress = Address.parse('kQBWqA0Zb6TmFlMUIoDlyAscUAcMQ3-1tae2POQ4Xl4xrw_V');
+       const tonClient = new TonClient({
+        endpoint: 'https://testnet.toncenter.com/api/v2/jsonRPC',
+      });
+      
+       const userAddress = Address.parse(wallet?.account.address);
+       
+    // Open the JettonMaster contract instance.
+    const jettonMaster = tonClient.open(JettonMaster.create(jettonMasterAddress));
+    console.log(await jettonMaster.getWalletAddress(userAddress))
+    */
     try {
       // --- Preimage Handling: Accept input as either hex (with "0x") or decimal ---
       // Convert the preimage input string directly to a BigInt.
@@ -204,7 +257,10 @@ export default function PerformSwap() {
       });
       const swapCounter = BigInt(result.stack[0][1]);
       let swapId = null;
+      await new Promise(resolve => setTimeout(resolve, 1500));
+
       for (let i = 0n; i < swapCounter; i++) {
+        await new Promise(resolve => setTimeout(resolve, 1500));
         try {
           result = await client.runGetMethod({
             address: contractAddress,
@@ -239,7 +295,7 @@ export default function PerformSwap() {
       const messages = [
         {
           address: contractAddress,
-          amount: toNano('0.005').toString(), // Gas amount
+          amount: toNano('0.2').toString(), // Gas amount
           payload: payload,
         },
       ];
