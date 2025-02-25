@@ -9,7 +9,6 @@ import { beginCell, Address, SendMode, toNano } from "ton-core"; // Import Addre
 import {Button, PayButton,requestProvider, init} from '@getalby/bitcoin-connect-react';
 
 import WebApp from '@twa-dev/sdk';
-import { TonClient, JettonMaster } from "@ton/ton";
 
 const JETTON_QUANTITY = 100000000;
 
@@ -92,7 +91,6 @@ export default function PerformSwap() {
     */
 
     // Build an extra cell for hashLock and timeLock.
-    const jettonWalletAddress = Address.parse("kQDFnS37JDFpTI5dg84f5F4hhviz1hIuRck7sBe4itqSaRT2");
 
     const OP_DEPOSIT_NOTIFICATION = 0xDEADBEEFn
 
@@ -164,7 +162,18 @@ export default function PerformSwap() {
     }
 
     const initiator = wallet?.account.address;
+    const jettonMasterAddress = 'kQBWqA0Zb6TmFlMUIoDlyAscUAcMQ3-1tae2POQ4Xl4xrw_V';
+    const jettonAddressResult = await client.getJettonMasters({
+      address: jettonMasterAddress
+    });
+    console.log(jettonAddressResult)
+    await new Promise(resolve => setTimeout(resolve, 1500));
 
+    const jettonWalletResult = await client.getJettonWallets({
+      owner_address: wallet?.account.address,
+      jetton_address: jettonAddressResult[0].address
+    });
+    const jettonWalletAddress = jettonWalletResult[0].address;
     try {
       console.log("HashLock: "+lnToTgDecodedInvoice.payment_hash)
       const hashLockBigInt = BigInt("0x" + lnToTgDecodedInvoice.payment_hash);
@@ -178,7 +187,6 @@ export default function PerformSwap() {
           timeLockBigInt
       ); // Use the BigInt version
       console.log(payload)
-      const jettonWalletAddress = "kQDFnS37JDFpTI5dg84f5F4hhviz1hIuRck7sBe4itqSaRT2"
 
       const messages = [
         {
@@ -213,17 +221,7 @@ export default function PerformSwap() {
   };
   const completeSwap = async (preimageInput) => {
     const contractAddress = import.meta.env.VITE_CONTRACT_ADDRESS;
-    /*const jettonMasterAddress = Address.parse('kQBWqA0Zb6TmFlMUIoDlyAscUAcMQ3-1tae2POQ4Xl4xrw_V');
-       const tonClient = new TonClient({
-        endpoint: 'https://testnet.toncenter.com/api/v2/jsonRPC',
-      });
-      
-       const userAddress = Address.parse(wallet?.account.address);
-       
-    // Open the JettonMaster contract instance.
-    const jettonMaster = tonClient.open(JettonMaster.create(jettonMasterAddress));
-    console.log(await jettonMaster.getWalletAddress(userAddress))
-    */
+
     try {
       // --- Preimage Handling: Accept input as either hex (with "0x") or decimal ---
       // Convert the preimage input string directly to a BigInt.
