@@ -34,6 +34,7 @@ export default function PerformSwap() {
   const [lnToTgDecodedInvoice,setLnToTgDecodedInvoice] = useState("");
   const [preimage,setPreimage] = useState("");
 
+  const [contractSwap,setContractSwap] = useState();
   const [isSuccessful, setIsSuccessful] = useState(false);
   const contractAddress = import.meta.env.VITE_CONTRACT_ADDRESS;
 
@@ -66,11 +67,32 @@ export default function PerformSwap() {
       }
     };
   },[lnToTgInvoice]);
+
   useEffect(() => {
-    if(wallet){
-      getTgBTCAmount();
+    if(client && contractAddress && swap){
+      if(!swap.invoice) return;
+      try {
+        const decoded = decode(swap.invoice);
+        console.log("Payment Hash: "+decoded.payment_hash);
+        const hashLockBigInt = BigInt('0x'+decoded.payment_hash);
+        client.runGetMethod({
+          address: contractAddress,
+          method: 'get_swap_by_hashlock',
+          stack: [{ type: "num", value: hashLockBigInt.toString() }]
+        }).then(result => {
+          console.log(result);
+          setContractSwap({
+            swapId: result.stack[0][1],
+            hashLock: result.stack[4][1],
+            timeLock: result.stack[5][1],
+            isCompleted: result.stack[6][1]
+          });
+        });
+      } catch(err){
+        console.error(err);
+      }
     }
-  },[wallet]);
+  },[client,contractAddress,swap])
   
   const createSwapPayload = (initiator, amount, hashLock, timeLock) => {
     /* Create a new cell
@@ -221,7 +243,7 @@ export default function PerformSwap() {
   };
   const completeSwap = async (preimageInput) => {
     const contractAddress = import.meta.env.VITE_CONTRACT_ADDRESS;
-
+    if(!contractSwap) return;
     try {
       // --- Preimage Handling: Accept input as either hex (with "0x") or decimal ---
       // Convert the preimage input string directly to a BigInt.
@@ -246,41 +268,13 @@ export default function PerformSwap() {
       const hashBuffer = crypto.createHash('sha256').update(preimageBuffer).digest();
       const computedHash = hashBuffer.toString('hex');
       console.log("Computed Hash: " + computedHash);
-  
-      // --- Locate the correct swap using the computed hashLock ---
-      let result = await client.runGetMethod({
-        address: contractAddress,
-        method: 'get_swap_counter',
-        stack: []
-      });
-      const swapCounter = BigInt(result.stack[0][1]);
-      let swapId = null;
-      await new Promise(resolve => setTimeout(resolve, 1500));
-
-      for (let i = 0n; i < swapCounter; i++) {
-        await new Promise(resolve => setTimeout(resolve, 1500));
-        try {
-          result = await client.runGetMethod({
-            address: contractAddress,
-            method: 'get_swap',
-            stack: [{ type: "num", value: i.toString() }]
-          });
-          const swapHashLock = result.stack[3][1];
-          // Compare computed hash prefixed with "0x" to the stored hashLock.
-          if (swapHashLock === '0x' + computedHash) {
-            console.log(result.stack);
-            swapId = i;
-            console.log(`SwapID found: ${i} - HashLock: ${swapHashLock}`);
-            break; // Found a match—exit the loop.
-          }
-        } catch (err) {
-          console.error(`Error fetching swap with id ${i}:`, err);
-          // Continue searching in case of errors on a particular id.
-        }
-      }
-      if (swapId === null) {
-        console.error("No swap found with that invoice");
-        return;
+      const swapHashLock = contractSwap.hashLock;
+      let swapId;
+      console.log(`Contract HashLock: ${swapHashLock}`)
+      // Compare computed hash prefixed with "0x" to the stored hashLock.
+      if (swapHashLock === '0x'+computedHash) {
+        swapId = contractSwap.swapId;
+        console.log(`SwapID found: ${swapId} - HashLock: ${swapHashLock}`);
       }
       console.log(`Preimage as BigInt: ${preimageBigInt}`);
       console.log(`SwapId: ${swapId}`);
@@ -398,48 +392,53 @@ export default function PerformSwap() {
 
             <div className="card">
             <div className="balance-amount mb-2">Lightning to tgBTC swap</div>
-            <div className="balance-amount mb-2">{swap?.amount} satoshis</div>           
-            <PayButton 
-                invoice={swap?.invoice} 
-                onPaid={(response) => {
-                  /* 
-                    Select the amount available in the smart contract and pays it, release payment at TON
-                    after
-                  */
-                  setPreimage(response.preimage);
-
-                  completeSwap(response.preimage);
-                }} 
-              />
+            <div className="balance-amount mb-2">{swap?.amount} satoshis</div>  
             {
-              preimage &&
-              <button
-                onClick={() => {
-                  /* 
-                    Select the amount available in the smart contract and pays it, release payment at TON
-                    after
-                  */
-                  console.log("Preimage: "+preimage)
-                  const computedHash = crypto.createHash('sha256').update(Buffer.from(preimage, 'hex')).digest('hex');
-                  console.log("Computed Hash: "+computedHash)
+               contractSwap ? 
+               <>
+               <PayButton 
+                  invoice={swap?.invoice} 
+                  onPaid={(response) => {
+                    /* 
+                      Select the amount available in the smart contract and pays it, release payment at TON
+                      after
+                    */
+                    setPreimage(response.preimage);
 
-                  const decoded = decode(swap.invoice);
-                  console.log("Payment Hash: "+decoded.payment_hash);
-                  const preimageBigInt = BigInt('0x'+preimage);
-                  console.log("Preimage BigInt: "+preimageBigInt)
-                  console.log("Buffer to BigInt: "+bufferToBigInt(Buffer.from(preimage, 'hex')))
-                  //console.log("Computed hashlock using function with cell: "+computeHashLock(Buffer.from(preimage, 'hex')))
-                  const hashBuffer = crypto.createHash('sha256').update(Buffer.from(preimage, 'hex')).digest(); // Use Node's crypto for ton-core compatible hash
-                  console.log(hashBuffer.toString('hex'))
-                  console.log(`Calculated hashlock ton: ${calculateHashLock(BigInt('0x' + preimage))}`)
-                  completeSwap(preimage);
-              }}
-              className={`button ${loading ? "loading" : ""}`}
-                >
-                {loading ? "Processing..." : "Claim"}
-              </button> 
-            }
+                    completeSwap(response.preimage);
+                  }} 
+                />
+                {
+                  preimage &&
+                  <button
+                    onClick={() => {
+                      /* 
+                        Select the amount available in the smart contract and pays it, release payment at TON
+                        after
+                      */
+                      console.log("Preimage: "+preimage)
+                      const computedHash = crypto.createHash('sha256').update(Buffer.from(preimage, 'hex')).digest('hex');
+                      console.log("Computed Hash: "+computedHash)
 
+                      const decoded = decode(swap.invoice);
+                      console.log("Payment Hash: "+decoded.payment_hash);
+                      const preimageBigInt = BigInt('0x'+preimage);
+                      console.log("Preimage BigInt: "+preimageBigInt)
+                      console.log("Buffer to BigInt: "+bufferToBigInt(Buffer.from(preimage, 'hex')))
+                      //console.log("Computed hashlock using function with cell: "+computeHashLock(Buffer.from(preimage, 'hex')))
+                      const hashBuffer = crypto.createHash('sha256').update(Buffer.from(preimage, 'hex')).digest(); // Use Node's crypto for ton-core compatible hash
+                      console.log(hashBuffer.toString('hex'))
+                      console.log(`Calculated hashlock ton: ${calculateHashLock(BigInt('0x' + preimage))}`)
+                      completeSwap(preimage);
+                  }}
+                  className={`button ${loading ? "loading" : ""}`}
+                    >
+                    {loading ? "Processing..." : "Claim"}
+                  </button> 
+                }
+               </>
+               : "No swap found, wrong parameters"
+            }         
 
             </div>
           }
