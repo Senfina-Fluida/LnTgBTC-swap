@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import WebApp from '@twa-dev/sdk';
 import { useSearchParams } from 'react-router-dom';
 import SwapsTable from '../components/SwapsTable.tsx'; 
 
@@ -9,6 +10,7 @@ export default function MyPendingSwaps() {
   const [error, setError] = useState(null);
 
   useEffect(() => {
+    WebApp.ready();
     const params = searchParams.get('params');
 
     if (params) {
@@ -26,8 +28,35 @@ export default function MyPendingSwaps() {
       setLoading(false); // No params, not an error, just no data.
     }
   }, [searchParams]);
+  const handleSwapSelect = (swap) => {
+    if (!swap.amount || isNaN(swap.amount) || parseFloat(swap.amount) <= 0) {
+      alert("Invalid Swap");
+      return;
+    }
+    let data;
+    if(swap.isOwner){
+      data = {
+        swapId: swap._id,
+        action:"delete_pending_swap"
+      };
+    } else {
+      data = {
+        swapId: swap._id,
+        action:"select_swap"
+      };
+    };
 
+
+    console.log("Data:", data);
+
+    try {
+      WebApp.sendData(JSON.stringify(data));
+    } catch (error) {
+      console.error("Error sending swap request:", error);
+      alert("Error sending swap request. Check console.");
+    }
+  };
   return (
-    <SwapsTable title="My Pending Swaps" swaps={swaps} loading={loading} error={error} />
+    <SwapsTable title="My Pending Swaps" swaps={swaps} handleSwapSelect={handleSwapSelect} error={error} />
   );
 }

@@ -44,15 +44,12 @@ const PendingSwaps: React.FC<PendingSwapsProps> = ({ title, swaps, handleSwapSel
                   <td className="border border-gray-200 px-4 py-2 text-gray-700">{swap.destination}</td>
                   <td className="border border-gray-200 px-4 py-2 text-gray-700">{swap.amount}</td>
                   <td className="border border-gray-200 px-4 py-2 text-center">
-                  {
-                    !swap.isOwner &&
                     <button
                       onClick={() => handleSwapSelect(swap)}
-                      className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-1 px-2 rounded whitespace-nowrap"
+                      className={`${swap.isOwner ? "bg-red-500 hover:bg-red-700" : "bg-blue-500 hover:bg-blue-700"} text-white font-bold py-1 px-2 rounded whitespace-nowrap`}
                       >
-                        Select
+                        {swap.isOwner ? "Delete" : "Select"}
                     </button>
-                  }
                   </td>
                 </tr>
               ))}
