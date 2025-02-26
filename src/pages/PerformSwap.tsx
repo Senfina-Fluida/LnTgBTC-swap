@@ -123,7 +123,7 @@ export default function PerformSwap() {
     // Build the deposit notification payload.
     const forwardPayload = beginCell()
       .storeUint(OP_DEPOSIT_NOTIFICATION, 32)  // deposit notification op code (0xDEADBEEF)
-      .storeUint(toNano(amount/10**8), 128)
+      .storeUint(toNano(amount/10**9), 128)
       .storeAddress(initiator)
       .storeRef(
         beginCell()
@@ -138,7 +138,7 @@ export default function PerformSwap() {
     const cell = beginCell()
       .storeUint(0x0f8a7ea5, 32)           // transfer op code for jetton transfer
       .storeUint(0, 64)                    // query_id
-      .storeCoins(toNano(amount/10**8))             // token amount for transfer
+      .storeCoins(toNano(amount/10**9))             // token amount for transfer
       .storeAddress(Address.parse(contractAddress))         // destination
       .storeAddress(Address.parse(contractAddress))         // response destination (ensure this is correct for your use case)
       .storeBit(0)                         // custom payload flag (0 = none)
@@ -184,18 +184,8 @@ export default function PerformSwap() {
     }
 
     const initiator = wallet?.account.address;
-    const jettonMasterAddress = 'kQBWqA0Zb6TmFlMUIoDlyAscUAcMQ3-1tae2POQ4Xl4xrw_V';
-    const jettonAddressResult = await client.getJettonMasters({
-      address: jettonMasterAddress
-    });
-    console.log(jettonAddressResult)
-    await new Promise(resolve => setTimeout(resolve, 1500));
-
-    const jettonWalletResult = await client.getJettonWallets({
-      owner_address: wallet?.account.address,
-      jetton_address: jettonAddressResult[0].address
-    });
-    const jettonWalletAddress = jettonWalletResult[0].address;
+    const jettonWallet = await client.getTgBTCWalletAddressByOwner({ owner_address: wallet?.account.address });
+    const jettonWalletAddress = jettonWallet.address;
     try {
       console.log("HashLock: "+lnToTgDecodedInvoice.payment_hash)
       const hashLockBigInt = BigInt("0x" + lnToTgDecodedInvoice.payment_hash);
