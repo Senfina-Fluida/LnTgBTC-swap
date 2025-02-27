@@ -58,5 +58,17 @@ This **MiniApp** is designed to work alongside the **Telegram bot** for facilita
 
 ---
 
+## Getting started
+
+Create a `.env` file with following content: 
+
+```
+VITE_TONXAPI_KEY=TONXAPI_KEY
+```
+
+Install packages with ```pnpm install``` and then run ```pnpm dev```.
+
+---
+
 ## **License**
 This project is licensed under the [MIT License](LICENSE).
