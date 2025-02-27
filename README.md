@@ -64,6 +64,7 @@ Create a `.env` file with following content:
 
 ```
 VITE_TONXAPI_KEY=TONXAPI_KEY
+VITE_CONTRACT_ADDRESS=SMART_CONTRACT_ADDRESS
 ```
 
 Install packages with ```pnpm install``` and then run ```pnpm dev```.
