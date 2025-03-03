@@ -3,7 +3,7 @@ import WebApp from '@twa-dev/sdk';
 import { useSearchParams } from 'react-router-dom';
 import SwapsTable from '../components/SwapsTable.tsx'; 
 
-export default function MyPendingSwaps() {
+export default function Swaps() {
   const [searchParams] = useSearchParams();
   const [swaps, setSwaps] = useState([]);
   const [loading, setLoading] = useState(true);

@@ -305,7 +305,7 @@ export default function PerformSwap() {
     const tgBTCWallet = await client.getTgBTCBalance({ address: jettonWallets.address });
     setTgBtcBalance(tgBTCWallet.balance / JETTON_QUANTITY);
   };
- const makeInvoice = async () => {
+  const makeInvoice = async () => {
       // if no WebLN provider exists, it will launch the modal
       const weblnProvider = await requestProvider();
       setLnProvider(weblnProvider);

@@ -3,7 +3,7 @@ import { createRoot } from "react-dom/client";
 import "./index.css";
 import SwapRequest from "./pages/SwapRequest.tsx";
 
-import MyPendingSwaps from "./pages/MyPendingSwaps.tsx";
+import Swaps from "./pages/Swaps.tsx";
 import PerformSwap from "./pages/PerformSwap.tsx";
 
 import { TonConnectUIProvider, THEME } from "@tonconnect/ui-react";
@@ -22,7 +22,7 @@ createRoot(document.getElementById("root")!).render(
           <Route path="/" element={<SwapRequest/>} />
           <Route path="/startSwap" element={<PerformSwap/>} />
 
-          <Route path="/myPendingSwaps" element={<MyPendingSwaps/>} />
+          <Route path="/swaps" element={<Swaps/>} />
         </Routes>
       </BrowserRouter>
     </TonConnectUIProvider>

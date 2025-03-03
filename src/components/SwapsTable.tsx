@@ -5,6 +5,7 @@ interface Swap {
   id?: number;
   hash?: string;
   source: string;
+  status: string;
   destination: string;
   amount: number;
   isOwner: boolean;
@@ -48,7 +49,12 @@ const PendingSwaps: React.FC<PendingSwapsProps> = ({ title, swaps, handleSwapSel
                       onClick={() => handleSwapSelect(swap)}
                       className={`${swap.isOwner ? "bg-red-500 hover:bg-red-700" : "bg-blue-500 hover:bg-blue-700"} text-white font-bold py-1 px-2 rounded whitespace-nowrap`}
                       >
-                        {swap.isOwner ? "Delete" : "Select"}
+                        {
+                          swap.isOwner ?
+                           swap.status === "pending" ? "Delete" :
+                           swap.status === "locked" && "Refund" : 
+                           "Select"
+                        }
                     </button>
                   </td>
                 </tr>
