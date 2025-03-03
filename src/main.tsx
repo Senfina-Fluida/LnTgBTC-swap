@@ -5,6 +5,7 @@ import SwapRequest from "./pages/SwapRequest.tsx";
 
 import Swaps from "./pages/Swaps.tsx";
 import PerformSwap from "./pages/PerformSwap.tsx";
+import RefundSwap from "./pages/RefundSwap.tsx";
 
 import { TonConnectUIProvider, THEME } from "@tonconnect/ui-react";
 import { BrowserRouter,Routes,Route } from 'react-router-dom';
@@ -21,8 +22,8 @@ createRoot(document.getElementById("root")!).render(
         <Routes>
           <Route path="/" element={<SwapRequest/>} />
           <Route path="/startSwap" element={<PerformSwap/>} />
-
           <Route path="/swaps" element={<Swaps/>} />
+          <Route path="/refundSwap" element={<RefundSwap/>} />
         </Routes>
       </BrowserRouter>
     </TonConnectUIProvider>

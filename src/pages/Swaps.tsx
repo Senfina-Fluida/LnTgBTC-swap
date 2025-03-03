@@ -35,10 +35,17 @@ export default function Swaps() {
     }
     let data;
     if(swap.isOwner){
-      data = {
-        swapId: swap._id,
-        action:"delete_pending_swap"
-      };
+      if(swap.status === "pending"){
+        data = {
+          swapId: swap._id,
+          action:"delete_pending_swap"
+        };
+      } else if(swap.status === "locked"){
+        data = {
+          swapId: swap._id,
+          action:"refund_swap"
+        };
+      }
     } else {
       data = {
         swapId: swap._id,

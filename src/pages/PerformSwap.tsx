@@ -15,7 +15,7 @@ const JETTON_QUANTITY = 100000000;
 export default function PerformSwap() {
 
   const [swap, setSwap] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
 
@@ -69,30 +69,38 @@ export default function PerformSwap() {
   },[lnToTgInvoice]);
 
   useEffect(() => {
-    if(client && contractAddress && swap){
+    if(client && contractAddress && swap && !contractSwap && !loading){
       if(!swap.invoice) return;
+      setLoading(true);
       try {
         const decoded = decode(swap.invoice);
         console.log("Payment Hash: "+decoded.payment_hash);
-        const hashLockBigInt = BigInt('0x'+decoded.payment_hash);
+        const hashLockBigInt = BigInt('0x' + decoded.payment_hash);
+
         client.runGetMethod({
           address: contractAddress,
           method: 'get_swap_by_hashlock',
           stack: [{ type: "num", value: hashLockBigInt.toString() }]
         }).then(result => {
-          console.log(result);
+          console.log({
+            swapId: result.stack[0][1],
+            hashLock: result.stack[4][1],
+            timeLock: result.stack[5][1],
+            isCompleted: result.stack[6][1]
+          })
           setContractSwap({
             swapId: result.stack[0][1],
             hashLock: result.stack[4][1],
             timeLock: result.stack[5][1],
             isCompleted: result.stack[6][1]
           });
+          setLoading(false);
         });
       } catch(err){
         console.error(err);
       }
     }
-  },[client,contractAddress,swap])
+  },[client,contractAddress,swap, contractSwap, loading])
   
   const createSwapPayload = (initiator, amount, hashLock, timeLock) => {
     /* Create a new cell
@@ -152,8 +160,6 @@ export default function PerformSwap() {
   const createCompleteSwapPayload = (swapId, preimageBigInt) => {
     // Create a new cell
     const OP_COMPLETE_SWAP = 2271560481n; // 0x87654321
-    console.log(BigInt(swapId));
-    console.log(preimageBigInt)
     const cell = beginCell()
       .storeUint(OP_COMPLETE_SWAP, 32)
       .storeUint(swapId,256)
@@ -189,9 +195,11 @@ export default function PerformSwap() {
     try {
       console.log("HashLock: "+lnToTgDecodedInvoice.payment_hash)
       const hashLockBigInt = BigInt("0x" + lnToTgDecodedInvoice.payment_hash);
-      console.log("Hashlock BigInt: "+hashLockBigInt)
-      const timeLockBigInt = BigInt(Math.floor(Date.now())) + 7200000n// BigInt(lnToTgDecodedInvoice.expiry);
-      console.log(timeLockBigInt)
+      console.log("Hashlock BigInt: "+hashLockBigInt);
+      //const timeLockBigInt = BigInt(Math.floor(Date.now()/1000)) // to test refund;
+      // Review
+      const timeLockBigInt = BigInt(Math.floor(((Number(Date.now())) + Number(lnToTgDecodedInvoice.expiry))/1000))
+      if(Number(swap?.amount) !== Number(lnToTgDecodedInvoice.sections[2].value)/1000) return;
       const payload = createSwapPayload(
           Address.parse(initiator),
           swap?.amount,
@@ -325,8 +333,8 @@ export default function PerformSwap() {
           <TonConnectButton />
         </div>
 
-        <h1 className="border">LnTgBTCSwap</h1>
-        <h2 className="mb-2">Perform Swap</h2>
+        
+        <h1 className="mb-2">Perform Swap</h1>
 
         {
         wallet ? 
@@ -364,7 +372,13 @@ export default function PerformSwap() {
                   >
                   {loading ? "Processing..." : "Start Swap"}
                 </button> 
-
+                {
+                  lnToTgDecodedInvoice &&
+                  <div>
+                    <p>Time Now: {new Date().toUTCString()}</p>
+                    <p>TimeLock: {new Date(Number(new Date()) + Number(lnToTgDecodedInvoice.expiry)).toUTCString()}</p>
+                  </div>
+                }
               </div>
 
               {loading && (
@@ -382,22 +396,30 @@ export default function PerformSwap() {
 
             <div className="card">
             <div className="balance-amount mb-2">Lightning to tgBTC swap</div>
-            <div className="balance-amount mb-2">{swap?.amount} satoshis</div>  
+            <div className="balance-amount mb-2">{swap?.invoice && Number(decode(swap.invoice).sections[2].value)/1000} satoshis</div>  
+            <div className='mb-2'>
+              <p>TimeLock: {contractSwap?.timeLock && new Date(Number(contractSwap.timeLock * 1000)).toUTCString()}</p>
+              <p>Time Now: {new Date().toUTCString()}</p>
+              <p>Can Swap: {contractSwap?.timeLock && (new Date(Number(contractSwap.timeLock * 1000)) > new Date()).toString()}</p>
+            </div>
             {
                contractSwap ? 
                <>
-               <PayButton 
-                  invoice={swap?.invoice} 
-                  onPaid={(response) => {
-                    /* 
-                      Select the amount available in the smart contract and pays it, release payment at TON
-                      after
-                    */
-                    setPreimage(response.preimage);
+                {
+                  (new Date(Number(contractSwap.timeLock) * 1000) > new Date()) &&
+                  <PayButton 
+                    invoice={swap?.invoice} 
+                    onPaid={(response) => {
+                      /* 
+                        Select the amount available in the smart contract and pays it, release payment at TON
+                        after
+                      */
+                      setPreimage(response.preimage);
 
-                    completeSwap(response.preimage);
-                  }} 
-                />
+                      completeSwap(response.preimage);
+                    }} 
+                  />
+                }
                 {
                   preimage &&
                   <button

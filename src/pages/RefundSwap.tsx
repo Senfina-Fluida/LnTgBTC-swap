@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { TonConnectButton, useTonWallet, useTonConnectUI } from "@tonconnect/ui-react";
 import { TONXJsonRpcProvider } from "@tonx/core";
-import { toNano, beginCell } from "ton-core";
+import { toNano, beginCell, SendMode } from "ton-core";
 import WebApp from '@twa-dev/sdk';
 import { decode } from 'light-bolt11-decoder';
 
@@ -21,7 +21,7 @@ interface ContractSwapData {
 
 export default function RefundSwap() {
   const [swap, setSwap] = useState<SwapData | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
+  const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [contractSwap, setContractSwap] = useState<ContractSwapData | null>(null);
 
@@ -56,8 +56,9 @@ export default function RefundSwap() {
   }, [searchParams]);
 
   useEffect(() => {
-    if (client && contractAddress && swap) {
-      if (!swap.invoice) return;
+    if (client && contractAddress && swap && !contractSwap && !loading) {
+      if (!swap?.invoice) return;
+      setLoading(true);
       try {
         const decoded = decode(swap.invoice);
         console.log("Payment Hash: " + decoded.payment_hash);
@@ -67,25 +68,32 @@ export default function RefundSwap() {
           method: 'get_swap_by_hashlock',
           stack: [{ type: "num", value: hashLockBigInt.toString() }]
         }).then(result => {
-          console.log(result);
-          setContractSwap({
+          console.log({
             swapId: result.stack[0][1],
             hashLock: result.stack[4][1],
             timeLock: result.stack[5][1],
             isCompleted: result.stack[6][1]
+          })
+          setContractSwap({
+            swapId: result.stack[0][1].toString(),
+            hashLock: result.stack[4][1].toString(),
+            timeLock: result.stack[5][1].toString(),
+            isCompleted: result.stack[6][1].toString()
           });
+          setLoading(false)
+
         });
       } catch (err) {
         console.error(err);
       }
     }
-  }, [client, contractAddress, swap]);
+  }, [client, contractAddress, swap, contractSwap,loading]);
 
   const createRefundSwapPayload = (swapId: string): string => {
     const OP_REFUND_SWAP = 2882400018n; 
     const cell = beginCell()
       .storeUint(OP_REFUND_SWAP, 32)
-      .storeUint(BigInt(swapId), 256) 
+      .storeUint(swapId, 256) 
       .endCell();
 
     return cell.toBoc().toString("base64");
@@ -98,11 +106,11 @@ export default function RefundSwap() {
     }
 
     try {
-      const payload = createRefundSwapPayload(contractSwap.swapId);
+      const payload = createRefundSwapPayload(contractSwap.swapId.toString());
       const messages = [
         {
           address: contractAddress,
-          amount: toNano('0.1').toString(), // Gas amount
+          amount: toNano('0.2').toString(), // Gas amount
           payload: payload,
         },
       ];
@@ -110,12 +118,13 @@ export default function RefundSwap() {
       await tonConnectUI.sendTransaction({
         validUntil: Math.floor(Date.now() / 1000) + 60,
         messages: messages,
+        sendMode:  SendMode.PAY_GAS_SEPARATELY
       });
       console.log("Refund transaction sent successfully");
 
       // Notify the bot that the refund was initiated
       const refundInitiated = {
-        swapId: swap?.swapId,
+        swapId: swap?._id,
         action: "refund_initiated"
       };
       WebApp.sendData(JSON.stringify(refundInitiated));
@@ -132,19 +141,21 @@ export default function RefundSwap() {
           <TonConnectButton />
         </div>
 
-        <h1 className="border">Refund Swap</h1>
-        <h2 className="mb-2">Refund Your Swap</h2>
+        <h1 className="mb-2">Refund Swap</h1>
 
         {wallet ? (
           <div className="card">
             {swap ? (
               <>
-                <div className="balance-amount mb-2">Swap ID: {swap.swapId}</div>
-                <div className="balance-amount mb-2">Amount: {Number(decode(swap.invoice).amount) / 1000} satoshis</div>
-
+                <div className="balance-amount mb-2">Amount: {Number(decode(swap.invoice).sections[2].value) / 1000} satoshis</div>
+                <div className='mb-2'>
+                  <p>TimeLock: {contractSwap?.timeLock && new Date(Number(contractSwap.timeLock) * 1000).toUTCString()}</p>
+                  <p>Time Now: {new Date().toUTCString()}</p>
+                  <p>Can Refund: {contractSwap?.timeLock && ((new Date(Number(contractSwap.timeLock) * 1000) < new Date())).toString()}</p>
+                </div>
                 <button
                   onClick={refundSwap}
-                  disabled={loading}
+                  disabled={loading || contractSwap?.timeLock && ((new Date(Number(contractSwap.timeLock) * 1000) > new Date()))}
                   className={`button ${loading ? "loading" : ""}`}
                 >
                   {loading ? "Processing..." : "Refund Swap"}
