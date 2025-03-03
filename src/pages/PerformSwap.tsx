@@ -6,7 +6,7 @@ import { decode } from 'light-bolt11-decoder';
 import crypto from 'crypto';
 import { beginCell, Address, SendMode, toNano } from "ton-core"; // Import Address and Cell
 
-import {Button, PayButton,requestProvider, init} from '@getalby/bitcoin-connect-react';
+import {disconnect, PayButton,requestProvider, init} from '@getalby/bitcoin-connect-react';
 
 import WebApp from '@twa-dev/sdk';
 
@@ -29,6 +29,7 @@ export default function PerformSwap() {
   });
   const [tgBtcBalance,setTgBtcBalance] = useState(0);
   const [lnProvider, setLnProvider] = useState();
+  const [countdown, setCountdown] = useState<number>(0);
 
   const [lnToTgInvoice,setLnToTgInvoice] = useState("");
   const [lnToTgDecodedInvoice,setLnToTgDecodedInvoice] = useState("");
@@ -101,7 +102,21 @@ export default function PerformSwap() {
       }
     }
   },[client,contractAddress,swap, contractSwap, loading])
+  useEffect(() => {
+    if (contractSwap?.timeLock) {
+      const timeLockDate = new Date(Number(contractSwap.timeLock) * 1000);
+      const now = new Date();
+      const remainingTime = Math.max(0, timeLockDate.getTime() - now.getTime());
   
+      setCountdown(remainingTime);
+  
+      const interval = setInterval(() => {
+        setCountdown(prev => Math.max(0, prev - 1000));
+      }, 1000);
+  
+      return () => clearInterval(interval);
+    }
+  }, [contractSwap]);
   const createSwapPayload = (initiator, amount, hashLock, timeLock) => {
     /* Create a new cell
     const OP_CREATE_SWAP = 305419896n; // 0x12345678
@@ -290,20 +305,18 @@ export default function PerformSwap() {
         },
       ];
   
-      // (Optional) Send message to bot.
-      const swapFinished = {
-        _id: swap._id,
-        action: "swap_finished"
-      };
-      console.log("Swap Request:", swapFinished);
-      WebApp.sendData(JSON.stringify(swapFinished));
-  
       await tonConnectUI.sendTransaction({
         validUntil: Math.floor(Date.now() / 1000) + 60, // Valid for 60 seconds.
         messages: messages
       });
       console.log("Contract function called successfully");
-  
+      // (Optional) Send message to bot.
+      const swapFinished = {
+        swapId: swap._id,
+        action: "swap_finished"
+      };
+      console.log("Swap Request:", swapFinished);
+      WebApp.sendData(JSON.stringify(swapFinished));
     } catch (error) {
       console.error("Error calling contract function:", error);
     }
@@ -315,16 +328,21 @@ export default function PerformSwap() {
   };
   const makeInvoice = async () => {
       // if no WebLN provider exists, it will launch the modal
-      const weblnProvider = await requestProvider();
-      setLnProvider(weblnProvider);
-      const invoice = await weblnProvider.makeInvoice({
-        amount: swap?.amount,
-        memo: "tgBTC swap"
-      });
-      setLnToTgInvoice(invoice.paymentRequest)
-      const decodedInvoice = decode(invoice.paymentRequest);
-      setLnToTgDecodedInvoice(decodedInvoice);
-      console.log(decodedInvoice)
+      try{
+        const weblnProvider = await requestProvider();
+        setLnProvider(weblnProvider);
+        const invoice = await weblnProvider.makeInvoice({
+          amount: swap?.amount,
+          memo: "tgBTC swap"
+        });
+        setLnToTgInvoice(invoice.paymentRequest)
+        const decodedInvoice = decode(invoice.paymentRequest);
+        setLnToTgDecodedInvoice(decodedInvoice);
+        console.log(decodedInvoice)
+      } catch(err){
+        console.error(err);
+        disconnect();
+      }
   };
   return (
     <div className="container">
@@ -398,15 +416,13 @@ export default function PerformSwap() {
             <div className="balance-amount mb-2">Lightning to tgBTC swap</div>
             <div className="balance-amount mb-2">{swap?.invoice && Number(decode(swap.invoice).sections[2].value)/1000} satoshis</div>  
             <div className='mb-2'>
-              <p>TimeLock: {contractSwap?.timeLock && new Date(Number(contractSwap.timeLock * 1000)).toUTCString()}</p>
-              <p>Time Now: {new Date().toUTCString()}</p>
-              <p>Can Swap: {contractSwap?.timeLock && (new Date(Number(contractSwap.timeLock * 1000)) > new Date()).toString()}</p>
+               <p>Expires in: {Math.floor(countdown / 1000)} seconds</p>
             </div>
             {
                contractSwap ? 
                <>
                 {
-                  (new Date(Number(contractSwap.timeLock) * 1000) > new Date()) &&
+                  countdown > 0 &&
                   <PayButton 
                     invoice={swap?.invoice} 
                     onPaid={(response) => {
@@ -421,7 +437,7 @@ export default function PerformSwap() {
                   />
                 }
                 {
-                  preimage &&
+                  preimage && countdown > 0 &&
                   <button
                     onClick={() => {
                       /* 

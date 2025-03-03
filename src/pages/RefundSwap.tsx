@@ -24,6 +24,7 @@ export default function RefundSwap() {
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [contractSwap, setContractSwap] = useState<ContractSwapData | null>(null);
+  const [countdown, setCountdown] = useState<number>(0);
 
   const [tonConnectUI] = useTonConnectUI();
   const [searchParams] = useSearchParams();
@@ -88,7 +89,21 @@ export default function RefundSwap() {
       }
     }
   }, [client, contractAddress, swap, contractSwap,loading]);
-
+  useEffect(() => {
+    if (contractSwap?.timeLock) {
+      const timeLockDate = new Date(Number(contractSwap.timeLock) * 1000);
+      const now = new Date();
+      const remainingTime = Math.max(0, timeLockDate.getTime() - now.getTime());
+  
+      setCountdown(remainingTime);
+  
+      const interval = setInterval(() => {
+        setCountdown(prev => Math.max(0, prev - 1000));
+      }, 1000);
+  
+      return () => clearInterval(interval);
+    }
+  }, [contractSwap]);
   const createRefundSwapPayload = (swapId: string): string => {
     const OP_REFUND_SWAP = 2882400018n; 
     const cell = beginCell()
@@ -149,13 +164,11 @@ export default function RefundSwap() {
               <>
                 <div className="balance-amount mb-2">Amount: {Number(decode(swap.invoice).sections[2].value) / 1000} satoshis</div>
                 <div className='mb-2'>
-                  <p>TimeLock: {contractSwap?.timeLock && new Date(Number(contractSwap.timeLock) * 1000).toUTCString()}</p>
-                  <p>Time Now: {new Date().toUTCString()}</p>
-                  <p>Can Refund: {contractSwap?.timeLock && ((new Date(Number(contractSwap.timeLock) * 1000) < new Date())).toString()}</p>
+                  <p>Time until refund: {Math.floor(countdown / 1000)} seconds</p>
                 </div>
                 <button
                   onClick={refundSwap}
-                  disabled={loading || contractSwap?.timeLock && ((new Date(Number(contractSwap.timeLock) * 1000) > new Date()))}
+                  disabled={loading || countdown > 0}
                   className={`button ${loading ? "loading" : ""}`}
                 >
                   {loading ? "Processing..." : "Refund Swap"}
