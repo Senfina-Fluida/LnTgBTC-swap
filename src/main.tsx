@@ -8,7 +8,7 @@ import PerformSwap from "./pages/PerformSwap.tsx";
 import RefundSwap from "./pages/RefundSwap.tsx";
 
 import { TonConnectUIProvider, THEME } from "@tonconnect/ui-react";
-import { BrowserRouter,Routes,Route } from 'react-router-dom';
+import { HashRouter,Routes,Route } from 'react-router-dom';
 import "./App.css";
 
 
@@ -18,14 +18,14 @@ createRoot(document.getElementById("root")!).render(
       uiPreferences={{ theme: THEME.DARK }}
       manifestUrl="https://tonxapi.com/tonconnect-manifest.json"
     >
-      <BrowserRouter>
+      <HashRouter>
         <Routes>
           <Route path="/" element={<SwapRequest/>} />
           <Route path="/startSwap" element={<PerformSwap/>} />
           <Route path="/swaps" element={<Swaps/>} />
           <Route path="/refundSwap" element={<RefundSwap/>} />
         </Routes>
-      </BrowserRouter>
+      </HashRouter>
     </TonConnectUIProvider>
   </StrictMode>
 );
