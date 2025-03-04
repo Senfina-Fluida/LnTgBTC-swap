@@ -13,6 +13,11 @@ export default defineConfig(({ mode }) => ({
         nodePolyfills({
           // Whether to polyfill `node:` protocol imports.
           protocolImports: true,
+          globals: {
+            Buffer: true,
+            global: true,
+            process: true,
+          },
         }),
       ]
       : [],
@@ -26,7 +31,10 @@ allowedHosts: true,
   resolve: {
     alias:
       /** browserify for @jbrowse/react-linear-genome-view */
-      { stream: "stream-browserify" },
+      { 
+        stream: "stream-browserify",
+        crypto: "crypto-browserify"
+      },
   },
   optimizeDeps: {
     esbuildOptions: {
