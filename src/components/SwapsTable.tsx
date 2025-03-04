@@ -1,21 +1,6 @@
 import React from 'react';
 
-interface Swap {
-  _id?: string;
-  id?: number;
-  hash?: string;
-  source: string;
-  status: string;
-  destination: string;
-  amount: number;
-  isOwner: boolean;
-}
-
-interface PendingSwapsProps {
-  title: string;
-  swaps: Swap[];
-  handleSwapSelect: (swap: Swap) => void;
-}
+import {PendingSwapsProps} from './Interfaces';
 
 const PendingSwaps: React.FC<PendingSwapsProps> = ({ title, swaps, handleSwapSelect }) => {
   return (
@@ -36,7 +21,7 @@ const PendingSwaps: React.FC<PendingSwapsProps> = ({ title, swaps, handleSwapSel
               </tr>
             </thead>
             <tbody>
-              {swaps.map((swap, index) => (
+              {swaps.map((swap) => (
                 <tr
                   key={swap._id}
                   className="hover:bg-gray-50"

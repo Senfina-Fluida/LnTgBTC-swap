@@ -1,4 +1,12 @@
 {
+  "compilerOptions": {
+    "noEmitOnError": false,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "skipLibCheck": true,
+    "strict": false,
+    "typeRoots": ["./node_modules/@types", "./types"]
+  },
   "files": [],
   "references": [
     { "path": "./tsconfig.app.json" },

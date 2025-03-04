@@ -2,21 +2,12 @@ import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { TonConnectButton, useTonWallet, useTonConnectUI } from "@tonconnect/ui-react";
 import { TONXJsonRpcProvider } from "@tonx/core";
-import { toNano, beginCell, SendMode } from "ton-core";
+import { toNano, beginCell } from "ton-core";
 import WebApp from '@twa-dev/sdk';
 import { decode } from 'light-bolt11-decoder';
 
-interface SwapData {
-  swapId: string;
-  invoice: string;
-}
+import { Swap as SwapData, ContractSwapData,DecodedInvoice } from '../components/Interfaces';
 
-interface ContractSwapData {
-  swapId: string;
-  hashLock: string;
-  timeLock: string;
-  isCompleted: boolean;
-}
 
 
 export default function RefundSwap() {
@@ -48,6 +39,7 @@ export default function RefundSwap() {
       } catch (err) {
         console.error("Error parsing params:", err);
         setError("Error loading swap data.");
+        console.log(error);
       } finally {
         setLoading(false);
       }
@@ -61,7 +53,7 @@ export default function RefundSwap() {
       if (!swap?.invoice) return;
       setLoading(true);
       try {
-        const decoded = decode(swap.invoice);
+        const decoded = decode(swap.invoice) as unknown as DecodedInvoice;
         console.log("Payment Hash: " + decoded.payment_hash);
         const hashLockBigInt = BigInt('0x' + decoded.payment_hash);
         client.runGetMethod({
@@ -71,12 +63,14 @@ export default function RefundSwap() {
         }).then(result => {
           console.log({
             swapId: result.stack[0][1],
+            amount: result.stack[3][1],
             hashLock: result.stack[4][1],
             timeLock: result.stack[5][1],
             isCompleted: result.stack[6][1]
           })
           setContractSwap({
             swapId: result.stack[0][1].toString(),
+            amount: result.stack[3][1],
             hashLock: result.stack[4][1].toString(),
             timeLock: result.stack[5][1].toString(),
             isCompleted: result.stack[6][1].toString()
@@ -108,7 +102,7 @@ export default function RefundSwap() {
     const OP_REFUND_SWAP = 2882400018n; 
     const cell = beginCell()
       .storeUint(OP_REFUND_SWAP, 32)
-      .storeUint(swapId, 256) 
+      .storeUint(swapId as unknown as number, 256) 
       .endCell();
 
     return cell.toBoc().toString("base64");
@@ -132,8 +126,7 @@ export default function RefundSwap() {
 
       await tonConnectUI.sendTransaction({
         validUntil: Math.floor(Date.now() / 1000) + 60,
-        messages: messages,
-        sendMode:  SendMode.PAY_GAS_SEPARATELY
+        messages: messages
       });
       console.log("Refund transaction sent successfully");
 
@@ -162,7 +155,7 @@ export default function RefundSwap() {
           <div className="card">
             {swap ? (
               <>
-                <div className="balance-amount mb-2">Amount: {Number(decode(swap.invoice).sections[2].value) / 1000} satoshis</div>
+                <div className="balance-amount mb-2">Amount: {swap.invoice && Number((decode(swap.invoice) as unknown as DecodedInvoice).sections[2].value) / 1000} satoshis</div>
                 <div className='mb-2'>
                   <p>Time until refund: {Math.floor(countdown / 1000)} seconds</p>
                 </div>

@@ -1,16 +1,16 @@
 import { useEffect, useState } from "react";
 import WebApp from '@twa-dev/sdk';
 import { useSearchParams } from 'react-router-dom';
-import SwapsTable from '../components/SwapsTable.tsx'; 
+import SwapsTable from '../components/SwapsTable.tsx';
 
+import { Swap } from "../components/Interfaces.tsx";
 
 const SwapRequest = () => {
-  const [amount, setAmount] = useState("");
-  const [to, setTo] = useState("Lightning");
-  const [pendingSwaps, setPendingSwaps] = useState([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [amount, setAmount] = useState<string>("");
+  const [to, setTo] = useState<string>("Lightning");
+  const [pendingSwaps, setPendingSwaps] = useState<Swap[]>([]);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
   const [searchParams] = useSearchParams();
-
 
   useEffect(() => {
     WebApp.ready();
@@ -19,20 +19,20 @@ const SwapRequest = () => {
     const initData = searchParams.get('params');
     if (initData) {
       try {
-        const data = JSON.parse(decodeURIComponent(initData)); // If you used JSON.stringify() on the bot side
+        const data: Swap[] = JSON.parse(decodeURIComponent(initData)); // Parse the data into an array of Swap objects
         console.log("Data received from bot:", data);
         setPendingSwaps(data);
-        // Use the data in your Web App
       } catch (error) {
         console.error("Error parsing initData:", error);
       }
     } else {
       console.log("No initial data received.");
     }
-  },[]);
+  }, [searchParams]);
 
   const handleSwapCreation = () => {
-    if (!amount || isNaN(amount) || parseFloat(amount) <= 0) {
+    const parsedAmount = parseFloat(amount);
+    if (!amount || isNaN(parsedAmount) || parsedAmount <= 0) {
       alert("Please enter a valid amount.");
       return;
     }
@@ -42,7 +42,7 @@ const SwapRequest = () => {
     const swapRequest = {
       source: to === "Lightning" ? "TON" : "Lightning",
       destination: to,
-      amount: parseFloat(amount),
+      amount: parsedAmount,
       action: "post_swap"
     };
 
@@ -57,8 +57,9 @@ const SwapRequest = () => {
       setIsLoading(false);
     }
   };
-  const handleSwapSelect = (swap) => {
-    if (!swap.amount || isNaN(swap.amount) || parseFloat(swap.amount) <= 0) {
+
+  const handleSwapSelect = (swap: Swap) => {
+    if (!swap.amount || isNaN(swap.amount) || swap.amount <= 0) {
       alert("Invalid Swap");
       return;
     }
@@ -67,7 +68,7 @@ const SwapRequest = () => {
 
     const swapSelect = {
       swapId: swap._id,
-      action:"select_swap"
+      action: "select_swap"
     };
 
     console.log("Swap Select:", swapSelect);
@@ -81,15 +82,18 @@ const SwapRequest = () => {
       setIsLoading(false);
     }
   };
+
   return (
     <div className="container">
-      <div className="header"> {/* Added header div */}
+      <div className="header">
         <h1>Swap Request</h1>
       </div>
 
-      <div className="card"> {/* Wrapped in card div */}
-        <div className="input-container"> {/* Wrapped inputs in input-container */}
-          <label htmlFor="amount" className="block text-sm font-medium text-white-700 mb-1">Amount:</label>
+      <div className="card">
+        <div className="input-container">
+          <label htmlFor="amount" className="block text-sm font-medium text-white-700 mb-1">
+            Amount:
+          </label>
           <input
             type="text"
             id="amount"
@@ -100,38 +104,43 @@ const SwapRequest = () => {
         </div>
 
         <div className="input-container">
-          <label htmlFor="to" className="block text-sm font-medium text-white-700 mb-1"> {/* Label styling */}
+          <label htmlFor="to" className="block text-sm font-medium text-white-700 mb-1">
             To:
-          </label>  
+          </label>
           <select
-              id="to"
-              value={to}
-              onChange={(e) => setTo(e.target.value)}
-              className="block w-full px-4 py-2 text-black border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 sm:text-sm" // Select styling
-            >
-              <option value="Lightning">Lightning</option>
-              <option value="TON">TON</option>
+            id="to"
+            value={to}
+            onChange={(e) => setTo(e.target.value)}
+            className="block w-full px-4 py-2 text-black border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 sm:text-sm"
+          >
+            <option value="Lightning">Lightning</option>
+            <option value="TON">TON</option>
           </select>
         </div>
+
         <div className="input-container">
-          <button className="button" onClick={handleSwapCreation} disabled={isLoading}> {/* Added button class */}
+          <button
+            className="button"
+            onClick={handleSwapCreation}
+            disabled={isLoading}
+          >
             {isLoading ? "Swapping..." : "Swap"}
           </button>
         </div>
-      </div> {/* Close card div */}
-      <div className="py-4 border-t border-gray-300 text-center"> {/* Separator */}
+      </div>
+
+      <div className="py-4 border-t border-gray-300 text-center">
         <span className="text-gray-500">OR</span>
       </div>
+
       <div className="card">
-          <SwapsTable 
-            title="All Pending Swaps"
-            swaps={pendingSwaps.filter(swap => {
-              return swap.destination !== to // && (swap.amount <= amount)
-            })}
-            loading={false} 
-            error={false} 
-            handleSwapSelect={handleSwapSelect}
-          />
+        <SwapsTable
+          title="All Pending Swaps"
+          swaps={pendingSwaps.filter((swap) => swap.destination !== to)}
+          loading={false}
+          error={null}
+          handleSwapSelect={handleSwapSelect}
+        />
       </div>
     </div>
   );
