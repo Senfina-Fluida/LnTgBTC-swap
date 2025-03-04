@@ -5,52 +5,45 @@ import { TONXJsonRpcProvider } from "@tonx/core";
 import { decode } from 'light-bolt11-decoder';
 import crypto from 'crypto';
 import { beginCell, Address, SendMode, toNano } from "ton-core"; // Import Address and Cell
-
-import {disconnect, PayButton,requestProvider, init} from '@getalby/bitcoin-connect-react';
-
+import { disconnect, PayButton, requestProvider } from '@getalby/bitcoin-connect-react';
 import WebApp from '@twa-dev/sdk';
 
-const JETTON_QUANTITY = 100000000;
+import { Swap as SwapData,ContractSwapData,DecodedInvoice } from '../components/Interfaces';
+
 
 export default function PerformSwap() {
-
-  const [swap, setSwap] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-
-
+  const [swap, setSwap] = useState<SwapData | null>(null);
+  const [loading, setLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
+  const [countdown, setCountdown] = useState<number>(0);
+  const [lnToTgInvoice, setLnToTgInvoice] = useState<string>("");
+  const [lnToTgDecodedInvoice, setLnToTgDecodedInvoice] = useState<any>(null);
+  const [preimage, setPreimage] = useState<string>("");
+  const [contractSwap, setContractSwap] = useState<ContractSwapData | null>(null);
 
   const [tonConnectUI] = useTonConnectUI();
   const [searchParams] = useSearchParams();
   const wallet = useTonWallet();
   const client = new TONXJsonRpcProvider({
     network: "testnet",
-    apiKey: import.meta.env.VITE_TONXAPI_KEY,
+    apiKey: import.meta.env.VITE_TONXAPI_KEY as string,
   });
-  const [tgBtcBalance,setTgBtcBalance] = useState(0);
-  const [lnProvider, setLnProvider] = useState();
-  const [countdown, setCountdown] = useState<number>(0);
 
-  const [lnToTgInvoice,setLnToTgInvoice] = useState("");
-  const [lnToTgDecodedInvoice,setLnToTgDecodedInvoice] = useState("");
-  const [preimage,setPreimage] = useState("");
-
-  const [contractSwap,setContractSwap] = useState();
-  const [isSuccessful, setIsSuccessful] = useState(false);
-  const contractAddress = import.meta.env.VITE_CONTRACT_ADDRESS;
+  const contractAddress = import.meta.env.VITE_CONTRACT_ADDRESS as string;
 
   useEffect(() => {
     WebApp.ready();
-    
+
     const params = searchParams.get('params');
     if (params) {
       try {
         const decodedParams = decodeURIComponent(params);
-        const parsedSwap = JSON.parse(decodedParams);
+        const parsedSwap: SwapData = JSON.parse(decodedParams);
         setSwap(parsedSwap);
       } catch (err) {
         console.error("Error parsing params:", err);
         setError("Error loading swaps.");
+        console.log(error);
       } finally {
         setLoading(false);
       }
@@ -58,24 +51,25 @@ export default function PerformSwap() {
       setLoading(false); // No params, not an error, just no data.
     }
   }, [searchParams]);
+
   useEffect(() => {
-    if(lnToTgInvoice){
+    if (lnToTgInvoice) {
       try {
         const decodedInvoice = decode(lnToTgInvoice);
         setLnToTgDecodedInvoice(decodedInvoice);
-      } catch(err){
-        
+      } catch (err) {
+        console.error(err);
       }
-    };
-  },[lnToTgInvoice]);
+    }
+  }, [lnToTgInvoice]);
 
   useEffect(() => {
-    if(client && contractAddress && swap && !contractSwap && !loading){
-      if(!swap.invoice) return;
+    if (client && contractAddress && swap && !contractSwap && !loading) {
+      if (!swap.invoice) return;
       setLoading(true);
       try {
-        const decoded = decode(swap.invoice);
-        console.log("Payment Hash: "+decoded.payment_hash);
+        const decoded = decode(swap.invoice) as unknown as DecodedInvoice;
+        console.log("Payment Hash: " + decoded.payment_hash);
         const hashLockBigInt = BigInt('0x' + decoded.payment_hash);
 
         client.runGetMethod({
@@ -85,150 +79,136 @@ export default function PerformSwap() {
         }).then(result => {
           console.log({
             swapId: result.stack[0][1],
+            amount: result.stack[3][1],
             hashLock: result.stack[4][1],
             timeLock: result.stack[5][1],
             isCompleted: result.stack[6][1]
-          })
+          });
           setContractSwap({
             swapId: result.stack[0][1],
+            amount: result.stack[3][1],
             hashLock: result.stack[4][1],
             timeLock: result.stack[5][1],
             isCompleted: result.stack[6][1]
           });
           setLoading(false);
         });
-      } catch(err){
+      } catch (err) {
         console.error(err);
       }
     }
-  },[client,contractAddress,swap, contractSwap, loading])
+  }, [client, contractAddress, swap, contractSwap, loading]);
+
   useEffect(() => {
     if (contractSwap?.timeLock) {
       const timeLockDate = new Date(Number(contractSwap.timeLock) * 1000);
       const now = new Date();
       const remainingTime = Math.max(0, timeLockDate.getTime() - now.getTime());
-  
+
       setCountdown(remainingTime);
-  
+
       const interval = setInterval(() => {
         setCountdown(prev => Math.max(0, prev - 1000));
       }, 1000);
-  
+
       return () => clearInterval(interval);
     }
   }, [contractSwap]);
-  const createSwapPayload = (initiator, amount, hashLock, timeLock) => {
-    /* Create a new cell
-    const OP_CREATE_SWAP = 305419896n; // 0x12345678
-    const cell = beginCell()
-    .storeUint(OP_CREATE_SWAP, 32)
-    .storeAddress(initiator)          // Explicitly store the sender’s address
-    .storeCoins(amount)             // Store coins (using TON’s special encoding)
-    .storeRef(                          // Extra data stored in a referenced cell:
-      beginCell()
-        .storeUint(hashLock, 256)   // 256-bit hashLock
-        .storeUint(timeLock, 64)    // 64-bit timeLock
-        .endCell()
-    )
-    .endCell()
-    // Convert the cell to a base64-encoded string
-    return cell.toBoc().toString("base64");
-    */
 
-    // Build an extra cell for hashLock and timeLock.
-
-    const OP_DEPOSIT_NOTIFICATION = 0xDEADBEEFn
+  const createSwapPayload = (initiator: Address, amount: number, hashLock: bigint, timeLock: bigint): string => {
+    const OP_DEPOSIT_NOTIFICATION = 0xDEADBEEFn;
 
     const extraCell = beginCell()
       .storeUint(hashLock, 256)
       .storeUint(timeLock, 64)
       .endCell();
-    // Build the deposit notification payload.
+
     const forwardPayload = beginCell()
-      .storeUint(OP_DEPOSIT_NOTIFICATION, 32)  // deposit notification op code (0xDEADBEEF)
-      .storeUint(toNano(amount/10**9), 128)
+      .storeUint(OP_DEPOSIT_NOTIFICATION, 32)
+      .storeUint(toNano(amount / 10 ** 9), 128)
       .storeAddress(initiator)
       .storeRef(
         beginCell()
           .storeAddress(initiator)
           .endCell()
       )
-      // Instead of storing hashLock/timeLock inline, store a reference to the extra cell.
       .storeRef(extraCell)
       .endCell();
 
-    // Then, create the transfer message.
     const cell = beginCell()
-      .storeUint(0x0f8a7ea5, 32)           // transfer op code for jetton transfer
-      .storeUint(0, 64)                    // query_id
-      .storeCoins(toNano(amount/10**9))             // token amount for transfer
-      .storeAddress(Address.parse(contractAddress))         // destination
-      .storeAddress(Address.parse(contractAddress))         // response destination (ensure this is correct for your use case)
-      .storeBit(0)                         // custom payload flag (0 = none)
-      .storeCoins(toNano("0.02"))        // forward TON amount
-      .storeBit(1)                         // forward payload flag (1 = referenced cell)
-      .storeRef(forwardPayload)            // attach the forward payload
+      .storeUint(0x0f8a7ea5, 32)
+      .storeUint(0, 64)
+      .storeCoins(toNano(amount / 10 ** 9))
+      .storeAddress(Address.parse(contractAddress))
+      .storeAddress(Address.parse(contractAddress))
+      .storeBit(0)
+      .storeCoins(toNano("0.02"))
+      .storeBit(1)
+      .storeRef(forwardPayload)
       .endCell();
 
     return cell.toBoc().toString("base64");
   };
-  const createCompleteSwapPayload = (swapId, preimageBigInt) => {
-    // Create a new cell
-    const OP_COMPLETE_SWAP = 2271560481n; // 0x87654321
+
+  const createCompleteSwapPayload = (swapId: string, preimageBigInt: bigint): string => {
+    const OP_COMPLETE_SWAP = 2271560481n;
     const cell = beginCell()
       .storeUint(OP_COMPLETE_SWAP, 32)
-      .storeUint(swapId,256)
-      .storeUint(preimageBigInt,256) // Store the cell as a reference
+      .storeUint(BigInt(swapId), 256)
+      .storeUint(preimageBigInt, 256)
       .endCell();
-  
-    // Convert the cell to a base64-encoded string
+
     return cell.toBoc().toString("base64");
   };
+
   const bufferToBigInt = (buffer: Buffer): bigint => {
     let result = 0n;
     for (const byte of buffer) {
-        result = (result << 8n) | BigInt(byte);
+      result = (result << 8n) | BigInt(byte);
     }
     return result;
-  }
-  function calculateHashLock(preimage: bigint): bigint {
-    // Build a TON cell exactly as done on-chain:
-    // Store the preimage as a 256-bit unsigned integer and then hash that cell.
+  };
+
+  const calculateHashLock = (preimage: bigint): bigint => {
     const cell = beginCell().storeUint(preimage, 256).endCell();
-    const hashBuffer = cell.hash(); // This computes the TON cell's hash
+    const hashBuffer = cell.hash();
     return BigInt('0x' + hashBuffer.toString('hex'));
-  } 
+  };
+
   const lockTgBTC = async () => {
-    if(!lnToTgDecodedInvoice){
+    if (!lnToTgDecodedInvoice) {
       console.log("No Invoice");
       return;
     }
+    if(!swap) return;
 
     const initiator = wallet?.account.address;
-    const jettonWallet = await client.getTgBTCWalletAddressByOwner({ owner_address: wallet?.account.address });
+    if (!initiator) return;
+
+    const jettonWallet = await client.getTgBTCWalletAddressByOwner({ owner_address: initiator });
     const jettonWalletAddress = jettonWallet.address;
+
     try {
-      console.log("HashLock: "+lnToTgDecodedInvoice.payment_hash)
+      console.log("HashLock: " + lnToTgDecodedInvoice.payment_hash);
       const hashLockBigInt = BigInt("0x" + lnToTgDecodedInvoice.payment_hash);
-      console.log("Hashlock BigInt: "+hashLockBigInt);
-      //const timeLockBigInt = BigInt(Math.floor(Date.now()/1000)) // to test refund;
-      // Review
-      const timeLockBigInt = BigInt(Math.floor(((Number(Date.now())) + Number(lnToTgDecodedInvoice.expiry))/1000))
-      if(Number(swap?.amount) !== Number(lnToTgDecodedInvoice.sections[2].value)/1000) return;
+      console.log("Hashlock BigInt: " + hashLockBigInt);
+      const timeLockBigInt = BigInt(Math.floor(((Number(Date.now())) + Number(lnToTgDecodedInvoice.expiry)) / 1000));
+
+      if (Number(swap.amount) !== Number(lnToTgDecodedInvoice.sections[2].value) / 1000) return;
+
       const payload = createSwapPayload(
-          Address.parse(initiator),
-          swap?.amount,
-          hashLockBigInt, // Use the BigInt version
-          timeLockBigInt
-      ); // Use the BigInt version
-      console.log(payload)
+        Address.parse(initiator),
+        swap.amount as number,
+        hashLockBigInt,
+        timeLockBigInt
+      );
 
       const messages = [
         {
           address: jettonWalletAddress,
           payload: payload,
           amount: toNano('0.1').toString(),
-          sendMode:  SendMode.PAY_GAS_SEPARATELY
+          sendMode: SendMode.PAY_GAS_SEPARATELY
         },
       ];
 
@@ -238,112 +218,103 @@ export default function PerformSwap() {
       });
       console.log("Contract function called successfully");
 
-      // Send message to bot 
       const swapLock = {
-        swapId: swap._id,
+        swapId: swap?._id,
         action: "swap_locked",
         invoice: lnToTgDecodedInvoice.paymentRequest
       };
 
       console.log("Swap Request:", swapLock);
       WebApp.sendData(JSON.stringify(swapLock));
-
       console.log("Message sent to bot");
 
     } catch (error) {
       console.error("Error calling contract function:", error);
     }
   };
-  const completeSwap = async (preimageInput) => {
-    const contractAddress = import.meta.env.VITE_CONTRACT_ADDRESS;
-    if(!contractSwap) return;
+
+  const completeSwap = async (preimageInput: string) => {
+    if (!contractSwap || !swap?.invoice) return;
+
     try {
-      // --- Preimage Handling: Accept input as either hex (with "0x") or decimal ---
-      // Convert the preimage input string directly to a BigInt.
-      const preimageBigInt = BigInt('0x'+preimageInput.trim());
-      
-      // Convert the BigInt to a hex string.
+      const preimageBigInt = BigInt('0x' + preimageInput.trim());
       let preimageHex = preimageBigInt.toString(16);
-      // Ensure even length (each byte should be two hex characters).
       if (preimageHex.length % 2 !== 0) {
         preimageHex = '0' + preimageHex;
       }
-      
-      // Create a Buffer from the hex string.
+
       const preimageBuffer = Buffer.from(preimageHex, 'hex');
-      
-      // (Optional) Store in a cell if needed.
       const preimageCell = beginCell().storeBuffer(preimageBuffer).endCell();
       console.log(`Preimage Cell: ${preimageCell}`);
-  
-      // --- Compute the hashLock from the preimage ---
-      // Using Node's crypto to create a SHA-256 hash.
+
       const hashBuffer = crypto.createHash('sha256').update(preimageBuffer).digest();
       const computedHash = hashBuffer.toString('hex');
       console.log("Computed Hash: " + computedHash);
+
       const swapHashLock = contractSwap.hashLock;
       let swapId;
-      console.log(`Contract HashLock: ${swapHashLock}`)
-      // Compare computed hash prefixed with "0x" to the stored hashLock.
-      if (swapHashLock === '0x'+computedHash) {
+
+      if (swapHashLock === '0x' + computedHash) {
         swapId = contractSwap.swapId;
         console.log(`SwapID found: ${swapId} - HashLock: ${swapHashLock}`);
       }
+
+      if (!swapId) return;
+      const decoded = decode(swap?.invoice) as unknown as DecodedInvoice;
+      if (Number(contractSwap.amount) !== Number(decoded.sections[2].value) / 1000) return;
+
       console.log(`Preimage as BigInt: ${preimageBigInt}`);
       console.log(`SwapId: ${swapId}`);
-  
-      // --- Create Payload and Send Transaction (unchanged) ---
+
       const payload = createCompleteSwapPayload(
-        swapId.toString(), // test value
-        preimageBigInt.toString()
+        swapId.toString(),
+        preimageBigInt
       );
+
       const messages = [
         {
           address: contractAddress,
-          amount: toNano('0.2').toString(), // Gas amount
+          amount: toNano('0.2').toString(),
           payload: payload,
         },
       ];
-  
+
       await tonConnectUI.sendTransaction({
-        validUntil: Math.floor(Date.now() / 1000) + 60, // Valid for 60 seconds.
+        validUntil: Math.floor(Date.now() / 1000) + 60,
         messages: messages
       });
+
       console.log("Contract function called successfully");
-      // (Optional) Send message to bot.
+
       const swapFinished = {
-        swapId: swap._id,
+        swapId: swap?._id,
         action: "swap_finished"
       };
+
       console.log("Swap Request:", swapFinished);
       WebApp.sendData(JSON.stringify(swapFinished));
     } catch (error) {
       console.error("Error calling contract function:", error);
     }
   };
-  const getTgBTCAmount = async () => {
-    const jettonWallets = await client.getTgBTCWalletAddressByOwner({ owner_address: wallet?.account.address });
-    const tgBTCWallet = await client.getTgBTCBalance({ address: jettonWallets.address });
-    setTgBtcBalance(tgBTCWallet.balance / JETTON_QUANTITY);
-  };
+
   const makeInvoice = async () => {
-      // if no WebLN provider exists, it will launch the modal
-      try{
-        const weblnProvider = await requestProvider();
-        setLnProvider(weblnProvider);
-        const invoice = await weblnProvider.makeInvoice({
-          amount: swap?.amount,
-          memo: "tgBTC swap"
-        });
-        setLnToTgInvoice(invoice.paymentRequest)
-        const decodedInvoice = decode(invoice.paymentRequest);
-        setLnToTgDecodedInvoice(decodedInvoice);
-        console.log(decodedInvoice)
-      } catch(err){
-        console.error(err);
-        disconnect();
-      }
+    try {
+      const weblnProvider = await requestProvider();
+      const invoice = await weblnProvider.makeInvoice({
+        amount: swap?.amount,
+        memo: "tgBTC swap"
+      });
+      setLnToTgInvoice(invoice.paymentRequest);
+      const decodedInvoice = decode(invoice.paymentRequest);
+      setLnToTgDecodedInvoice(decodedInvoice);
+      console.log(decodedInvoice);
+    } catch (err) {
+      console.error(err);
+      disconnect();
+    }
   };
+
   return (
     <div className="container">
       <div className="header">
@@ -351,152 +322,122 @@ export default function PerformSwap() {
           <TonConnectButton />
         </div>
 
-        
         <h1 className="mb-2">Perform Swap</h1>
 
-        {
-        wallet ? 
+        {wallet ? (
           <>
-          {
-            swap?.fromTON ?
-            <div className="card">
-              <div className="balance-amount mb-2">tgBTC to Lightning Swap</div>
+            {swap?.fromTON ? (
+              <div className="card">
+                <div className="balance-amount mb-2">tgBTC to Lightning Swap</div>
+                <div className="balance-amount mb-2">Swapping {swap?.amount} satoshis</div>
 
-              <div className="balance-amount mb-2">tgBTC Balance: {tgBtcBalance}</div>
-              <div className="balance-amount mb-2">Swaping {swap?.amount} satoshis</div>
-
-              <div className="input-container">
-
-                <button
+                <div className="input-container">
+                  <button
                     onClick={makeInvoice}
                     disabled={loading}
                     className={`button ${loading ? "loading" : ""}`}
                   >
-                  {loading ? "Processing..." : "Make Invoice using Bitcoin Connect"}
-                </button> 
-                <p>or</p>
-                <input
-                  type="text"
-                  placeholder={`Paste Invoice of ${swap?.amount} satoshis`}
-                  value={lnToTgInvoice}
-                  onChange={(e) => setLnToTgInvoice(e.target.value)}
-                  disabled={loading}
-                />
+                    {loading ? "Processing..." : "Make Invoice using Bitcoin Connect"}
+                  </button>
+                  <p>or</p>
+                  <input
+                    type="text"
+                    placeholder={`Paste Invoice of ${swap?.amount} satoshis`}
+                    value={lnToTgInvoice}
+                    onChange={(e) => setLnToTgInvoice(e.target.value)}
+                    disabled={loading}
+                  />
 
-                <button
+                  <button
                     onClick={lockTgBTC}
                     disabled={loading || !swap?.amount || !lnToTgDecodedInvoice}
                     className={`button ${loading ? "loading" : ""}`}
                   >
-                  {loading ? "Processing..." : "Start Swap"}
-                </button> 
-                {
-                  lnToTgDecodedInvoice &&
-                  <div>
-                    <p>Time Now: {new Date().toUTCString()}</p>
-                    <p>TimeLock: {new Date(Number(new Date()) + Number(lnToTgDecodedInvoice.expiry)).toUTCString()}</p>
+                    {loading ? "Processing..." : "Start Swap"}
+                  </button>
+                </div>
+
+                {loading && (
+                  <div className="transaction-container">
+                    <p>Processing transaction...</p>
                   </div>
-                }
+                )}
+
+              </div>
+            ) : (
+              <div className="card">
+                <div className="balance-amount mb-2">Lightning to tgBTC swap</div>
+                <div className="balance-amount mb-2">{swap?.invoice && Number((decode(swap.invoice) as unknown as DecodedInvoice).sections[2].value) / 1000} satoshis</div>
+                <div className='mb-2'>
+                  <p>Expires in: {Math.floor(countdown / 1000)} seconds</p>
+                </div>
+                {contractSwap ? (
+                  <>
+                    {countdown > 0 && (
+                      <PayButton
+                        invoice={swap?.invoice}
+                        onPaid={(response) => {
+                          setPreimage(response.preimage);
+                          completeSwap(response.preimage);
+                        }}
+                      />
+                    )}
+                    {preimage && countdown > 0 && (
+                      <button
+                        onClick={() => {
+                          if(!swap || !swap?.invoice) return;
+                          console.log("Preimage: " + preimage);
+                          const computedHash = crypto.createHash('sha256').update(Buffer.from(preimage, 'hex')).digest('hex');
+                          console.log("Computed Hash: " + computedHash);
+
+                          const decoded = decode(swap.invoice) as unknown as DecodedInvoice;
+                          console.log("Payment Hash: " + decoded.payment_hash);
+                          const preimageBigInt = BigInt('0x' + preimage);
+                          console.log("Preimage BigInt: " + preimageBigInt);
+                          console.log("Buffer to BigInt: " + bufferToBigInt(Buffer.from(preimage, 'hex')));
+                          const hashBuffer = crypto.createHash('sha256').update(Buffer.from(preimage, 'hex')).digest();
+                          console.log(hashBuffer.toString('hex'));
+                          console.log(`Calculated hashlock ton: ${calculateHashLock(BigInt('0x' + preimage))}`);
+                          completeSwap(preimage);
+                        }}
+                        className={`button ${loading ? "loading" : ""}`}
+                      >
+                        {loading ? "Processing..." : "Claim"}
+                      </button>
+                    )}
+                  </>
+                ) : (
+                  "No swap found, wrong parameters"
+                )}
+              </div>
+            )}
+          </>
+        ) : (
+          <div className="card">
+            <div className="text-center">
+              <div className="balance-amount mb-2">Welcome to tgBTC Transfer</div>
+
+              <div className="status-container">
+                <p>Please connect your TON wallet to view your tgBTC balance and make transfers</p>
               </div>
 
-              {loading && (
-                <div className="transaction-container">
-                  <p>Processing transaction...</p>
-                </div>
-              )}
+              <div className="step">
+                <div className="step-number">1</div>
+                <div>Click the Connect Wallet button above</div>
+              </div>
 
-              {isSuccessful && (
-                <div className="transaction-container">
-                  <p>Successful</p>
-                </div>
-              )}
-            </div> : 
+              <div className="step">
+                <div className="step-number">2</div>
+                <div>Select your TON wallet</div>
+              </div>
 
-            <div className="card">
-            <div className="balance-amount mb-2">Lightning to tgBTC swap</div>
-            <div className="balance-amount mb-2">{swap?.invoice && Number(decode(swap.invoice).sections[2].value)/1000} satoshis</div>  
-            <div className='mb-2'>
-               <p>Expires in: {Math.floor(countdown / 1000)} seconds</p>
+              <div className="step">
+                <div className="step-number">3</div>
+                <div>Start making secure transfers</div>
+              </div>
             </div>
-            {
-               contractSwap ? 
-               <>
-                {
-                  countdown > 0 &&
-                  <PayButton 
-                    invoice={swap?.invoice} 
-                    onPaid={(response) => {
-                      /* 
-                        Select the amount available in the smart contract and pays it, release payment at TON
-                        after
-                      */
-                      setPreimage(response.preimage);
-
-                      completeSwap(response.preimage);
-                    }} 
-                  />
-                }
-                {
-                  preimage && countdown > 0 &&
-                  <button
-                    onClick={() => {
-                      /* 
-                        Select the amount available in the smart contract and pays it, release payment at TON
-                        after
-                      */
-                      console.log("Preimage: "+preimage)
-                      const computedHash = crypto.createHash('sha256').update(Buffer.from(preimage, 'hex')).digest('hex');
-                      console.log("Computed Hash: "+computedHash)
-
-                      const decoded = decode(swap.invoice);
-                      console.log("Payment Hash: "+decoded.payment_hash);
-                      const preimageBigInt = BigInt('0x'+preimage);
-                      console.log("Preimage BigInt: "+preimageBigInt)
-                      console.log("Buffer to BigInt: "+bufferToBigInt(Buffer.from(preimage, 'hex')))
-                      //console.log("Computed hashlock using function with cell: "+computeHashLock(Buffer.from(preimage, 'hex')))
-                      const hashBuffer = crypto.createHash('sha256').update(Buffer.from(preimage, 'hex')).digest(); // Use Node's crypto for ton-core compatible hash
-                      console.log(hashBuffer.toString('hex'))
-                      console.log(`Calculated hashlock ton: ${calculateHashLock(BigInt('0x' + preimage))}`)
-                      completeSwap(preimage);
-                  }}
-                  className={`button ${loading ? "loading" : ""}`}
-                    >
-                    {loading ? "Processing..." : "Claim"}
-                  </button> 
-                }
-               </>
-               : "No swap found, wrong parameters"
-            }         
-
-            </div>
-          }
-          </>
-         : 
-         <div className="card">
-         <div className="text-center">
-           <div className="balance-amount mb-2">Welcome to tgBTC Transfer</div>
-
-           <div className="status-container">
-             <p>Please connect your TON wallet to view your tgBTC balance and make transfers</p>
-           </div>
-
-           <div className="step">
-             <div className="step-number">1</div>
-             <div>Click the Connect Wallet button above</div>
-           </div>
-
-           <div className="step">
-             <div className="step-number">2</div>
-             <div>Select your TON wallet</div>
-           </div>
-
-           <div className="step">
-             <div className="step-number">3</div>
-             <div>Start making secure transfers</div>
-           </div>
-         </div>
-       </div>
-        }
+          </div>
+        )}
       </div>
     </div>
   );
