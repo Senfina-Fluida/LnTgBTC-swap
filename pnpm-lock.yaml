@@ -35,6 +35,9 @@ importers:
       crypto:
         specifier: ^1.0.1
         version: 1.0.1
+      crypto-browserify:
+        specifier: ^3.12.1
+        version: 3.12.1
       light-bolt11-decoder:
         specifier: ^3.2.0
         version: 3.2.0
@@ -50,9 +53,6 @@ importers:
       ton-core:
         specifier: ^0.53.0
         version: 0.53.0(ton-crypto@3.2.0)
-      vite-plugin-node-polyfills:
-        specifier: ^0.22.0
-        version: 0.22.0(rollup@4.34.9)(vite@5.4.14(@types/node@22.13.8))
       vite-plugin-notifier:
         specifier: ^0.1.5
         version: 0.1.5
@@ -102,6 +102,9 @@ importers:
       vite:
         specifier: ^5.4.14
         version: 5.4.14(@types/node@22.13.8)
+      vite-plugin-node-polyfills:
+        specifier: ^0.22.0
+        version: 0.22.0(rollup@4.34.9)(vite@5.4.14(@types/node@22.13.8))
 
 packages:
 
