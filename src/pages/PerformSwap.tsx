@@ -174,9 +174,7 @@ export default function PerformSwap() {
     const hashBuffer = cell.hash();
     return BigInt('0x' + hashBuffer.toString('hex'));
   };
-  const wait = (ms: number): Promise<void> => {
-    return new Promise((resolve) => setTimeout(resolve, ms));
-  }
+
   const lockTgBTC = async () => {
     if (!lnToTgDecodedInvoice) {
       console.log("No Invoice");
@@ -194,7 +192,7 @@ export default function PerformSwap() {
       console.log("HashLock: " + lnToTgDecodedInvoice.payment_hash);
       const hashLockBigInt = BigInt("0x" + lnToTgDecodedInvoice.payment_hash);
       console.log("Hashlock BigInt: " + hashLockBigInt);
-      const timeLockBigInt = BigInt(Math.floor(((Number(Date.now())) + Number(lnToTgDecodedInvoice.expiry)*1000) / 1000));
+      const timeLockBigInt = BigInt(Math.floor(((Number(Date.now())) + Number(lnToTgDecodedInvoice.expiry + 300)*1000) / 1000));
 
       if (Number(swap.amount) !== Number(lnToTgDecodedInvoice.sections[2].value) / 1000) return;
       setLoading(true);
@@ -215,16 +213,17 @@ export default function PerformSwap() {
         },
       ];
 
-      await tonConnectUI.sendTransaction({
+      const transaction = await tonConnectUI.sendTransaction({
         validUntil: Math.floor(Date.now() / 1000) + 60,
         messages: messages,
-      });
+      }); 
+      console.log(transaction);
       console.log("Contract function called successfully");
-      await wait(30000);
       const swapLock = {
         swapId: swap?._id,
         action: "swap_locked",
-        invoice: lnToTgDecodedInvoice.paymentRequest
+        invoice: lnToTgDecodedInvoice.paymentRequest,
+        //transaction: tx
       };
 
       console.log("Swap Request:", swapLock);
