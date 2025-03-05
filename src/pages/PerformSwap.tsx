@@ -4,7 +4,7 @@ import { TonConnectButton, useTonWallet, useTonConnectUI } from "@tonconnect/ui-
 import { TONXJsonRpcProvider } from "@tonx/core";
 import { decode } from 'light-bolt11-decoder';
 import crypto from 'crypto';
-import { beginCell, Address, SendMode, toNano } from "ton-core"; // Import Address and Cell
+import { beginCell, Address, toNano, Cell } from "ton-core"; // Import Address and Cell
 import { disconnect, PayButton, requestProvider } from '@getalby/bitcoin-connect-react';
 import WebApp from '@twa-dev/sdk';
 
@@ -160,19 +160,13 @@ export default function PerformSwap() {
 
     return cell.toBoc().toString("base64");
   };
-
-  const bufferToBigInt = (buffer: Buffer): bigint => {
-    let result = 0n;
-    for (const byte of buffer) {
-      result = (result << 8n) | BigInt(byte);
-    }
-    return result;
-  };
-
-  const calculateHashLock = (preimage: bigint): bigint => {
-    const cell = beginCell().storeUint(preimage, 256).endCell();
-    const hashBuffer = cell.hash();
-    return BigInt('0x' + hashBuffer.toString('hex'));
+  // Function to convert boc to transaction hash
+  const bocToTransactionHash = (boc: string): string => {
+    // Parse the boc into a Cell
+    const cell = Cell.fromBoc(Buffer.from(boc, 'base64'))[0];
+    // Compute the hash of the cell
+    const hash = cell.hash().toString('hex');
+    return hash;
   };
 
   const lockTgBTC = async () => {
@@ -208,8 +202,7 @@ export default function PerformSwap() {
         {
           address: jettonWalletAddress,
           payload: payload,
-          amount: toNano('0.1').toString(),
-          sendMode: SendMode.PAY_GAS_SEPARATELY
+          amount: toNano('0.1').toString()
         },
       ];
 
@@ -217,13 +210,13 @@ export default function PerformSwap() {
         validUntil: Math.floor(Date.now() / 1000) + 60,
         messages: messages,
       }); 
-      console.log(transaction);
+      const transactionHash = bocToTransactionHash(transaction.boc);
       console.log("Contract function called successfully");
       const swapLock = {
         swapId: swap?._id,
         action: "swap_locked",
         invoice: lnToTgDecodedInvoice.paymentRequest,
-        //transaction: tx
+        transaction: transactionHash
       };
 
       console.log("Swap Request:", swapLock);
@@ -399,10 +392,8 @@ export default function PerformSwap() {
                           console.log("Payment Hash: " + decoded.payment_hash);
                           const preimageBigInt = BigInt('0x' + preimage);
                           console.log("Preimage BigInt: " + preimageBigInt);
-                          console.log("Buffer to BigInt: " + bufferToBigInt(Buffer.from(preimage, 'hex')));
                           const hashBuffer = crypto.createHash('sha256').update(Buffer.from(preimage, 'hex')).digest();
                           console.log(hashBuffer.toString('hex'));
-                          console.log(`Calculated hashlock ton: ${calculateHashLock(BigInt('0x' + preimage))}`);
                           completeSwap(preimage);
                         }}
                         className={`button ${loading ? "loading" : ""}`}
