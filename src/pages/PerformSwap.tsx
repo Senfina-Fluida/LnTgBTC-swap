@@ -220,7 +220,7 @@ export default function PerformSwap() {
         messages: messages,
       });
       console.log("Contract function called successfully");
-      await wait(5000);
+      await wait(15000);
       const swapLock = {
         swapId: swap?._id,
         action: "swap_locked",
@@ -308,7 +308,8 @@ export default function PerformSwap() {
       const weblnProvider = await requestProvider();
       const invoice = await weblnProvider.makeInvoice({
         amount: swap?.amount,
-        memo: "tgBTC swap"
+        memo: "tgBTC swap",
+        expiry: 86400000
       });
       setLnToTgInvoice(invoice.paymentRequest);
       const decodedInvoice = decode(invoice.paymentRequest);
