@@ -4,7 +4,7 @@ import { TonConnectButton, useTonWallet, useTonConnectUI } from "@tonconnect/ui-
 import { TONXJsonRpcProvider } from "@tonx/core";
 import { decode } from 'light-bolt11-decoder';
 import crypto from 'crypto';
-import { beginCell, Address, toNano, Cell } from "ton-core"; // Import Address and Cell
+import { beginCell, Address, toNano, Cell, Slice } from "ton-core"; // Import Address and Cell
 import { disconnect, PayButton, requestProvider } from '@getalby/bitcoin-connect-react';
 import WebApp from '@twa-dev/sdk';
 
@@ -47,8 +47,6 @@ export default function PerformSwap() {
       } finally {
         setLoading(false);
       }
-      const base64Boc = "te6cckECCAEAAZgAAeWIALJOfR7A8VA1RkC2pJkEinlG86pzaMNiFavH1yDuWxnKA5tLO3P////rPkUUOAAABC33GHdN2DO9qG7OXrJpy8801fIq3Mim1ufnFIqV8lZv/XnXHIeZytSTs4YOPWwY7CvvKnghRWN9yuW2ewNWu04PAQIKDsPIbQMHAgFoYgBgUHjUmRkn7RI6W68t+jfUxfMp6pTwWPIPSht7xH8IbCAvrwgAAAAAAAAAAAAAAAAAAQMBqg+KfqUAAAAAAAAAABAYAJ7KnjZVO0FL16YTVPY8BCwZU3cbe2YQc/o7wvblmHYpABPZU8bKp2gpevTCap7HgIWDKm7jb2zCDn9HeF7csw7FCAJiWgEEAmverb7vAAAAAAAAAAAAAAAAAAAAAYALJOfR7A8VA1RkC2pJkEinlG86pzaMNiFavH1yDuWxnLAGBQBQrxEz3OGM6R8LctIP/xL2VgJ1yygNRiJSpd17tT45ofcAAAAAZ8nz/gBDgAsk59HsDxUDVGQLakmQSKeUbzqnNow2IVq8fXIO5bGcsAAAh1jB9w==";
-      console.log(bocToTransactionHash(base64Boc))
     } else {
       setLoading(false); // No params, not an error, just no data.
     }
@@ -224,18 +222,18 @@ export default function PerformSwap() {
     setLoading(false);
 
   };
-  // Function to compute the transaction hash from a base64-encoded boc
+  // Function to extract the transaction hash from a base64-encoded boc
   const bocToTransactionHash = (base64Boc: string): string => {
     try {
       // Parse the base64 boc into a Cell
       const cell: Cell = Cell.fromBoc(Buffer.from(base64Boc, 'base64'))[0];
-
+  
       // Compute the hash of the root cell
       const hashBuffer: Buffer = cell.hash(); // Returns a Buffer
-
+  
       // Convert the hash buffer to a hexadecimal string
       const hashHex: string = hashBuffer.toString('hex');
-
+  
       return hashHex;
     } catch (error) {
       console.error("Error computing transaction hash:", error);
