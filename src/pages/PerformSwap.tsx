@@ -174,7 +174,9 @@ export default function PerformSwap() {
     const hashBuffer = cell.hash();
     return BigInt('0x' + hashBuffer.toString('hex'));
   };
-
+  const wait = (ms: number): Promise<void> => {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
   const lockTgBTC = async () => {
     if (!lnToTgDecodedInvoice) {
       console.log("No Invoice");
@@ -195,6 +197,7 @@ export default function PerformSwap() {
       const timeLockBigInt = BigInt(Math.floor(((Number(Date.now())) + Number(lnToTgDecodedInvoice.expiry)) / 1000));
 
       if (Number(swap.amount) !== Number(lnToTgDecodedInvoice.sections[2].value) / 1000) return;
+      setLoading(true);
 
       const payload = createSwapPayload(
         Address.parse(initiator),
@@ -217,7 +220,7 @@ export default function PerformSwap() {
         messages: messages,
       });
       console.log("Contract function called successfully");
-
+      await wait(5000);
       const swapLock = {
         swapId: swap?._id,
         action: "swap_locked",
@@ -231,6 +234,8 @@ export default function PerformSwap() {
     } catch (error) {
       console.error("Error calling contract function:", error);
     }
+    setLoading(false);
+
   };
 
   const completeSwap = async (preimageInput: string) => {
