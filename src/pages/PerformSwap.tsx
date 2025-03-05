@@ -220,7 +220,7 @@ export default function PerformSwap() {
         messages: messages,
       });
       console.log("Contract function called successfully");
-      await wait(15000);
+      await wait(30000);
       const swapLock = {
         swapId: swap?._id,
         action: "swap_locked",
