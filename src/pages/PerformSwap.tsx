@@ -10,8 +10,9 @@ import WebApp from '@twa-dev/sdk';
 
 import { Swap as SwapData, ContractSwapData, DecodedInvoice } from '../components/Interfaces';
 
+// const newLocal = 10 ** 9;
 // Jetton quantity for conversion (1 tgBTC = 10^9 nanoTgBTC)
-const JETTON_QUANTITY = 10 ** 9;
+// const JETTON_QUANTITY = newLocal;
 
 export default function PerformSwap() {
   const [swap, setSwap] = useState<SwapData | null>(null);
@@ -23,6 +24,7 @@ export default function PerformSwap() {
   const [preimage, setPreimage] = useState<string>("");
   const [contractSwap, setContractSwap] = useState<ContractSwapData | null>(null);
   const [tgBTCBalance, setTgBTCBalance] = useState<number>(0);
+  const [balanceChecked, setBalanceChecked] = useState<boolean>(false);
 
   const [tonConnectUI] = useTonConnectUI();
   const [searchParams] = useSearchParams();
@@ -56,44 +58,7 @@ export default function PerformSwap() {
     }
   }, [searchParams]);
 
-  // No automatic balance fetching - we'll only check balance when locking tgBTC
-
-  // Manual refresh for balance display
-  const handleRefreshBalance = async () => {
-    if (!wallet?.account.address) return;
-
-    setLoading(true);
-    try {
-      // First API call: get the jetton wallet address.
-      const jettonWallets = await client.getTgBTCWalletAddressByOwner({
-        owner_address: wallet.account.address,
-      });
-
-      // Introduce a delay (e.g., 2000 ms or 2 seconds) before the next call.
-      await new Promise(resolve => setTimeout(resolve, 2000));
-
-      // Second API call: get the tgBTC balance.
-      const tgBTCWallet = await client.getTgBTCBalance({
-        address: jettonWallets.address,
-      });
-
-      console.log("LOG ------BALANCE -----------", tgBTCWallet.balance);
-      const balanceNumber = Number(tgBTCWallet.balance) / JETTON_QUANTITY;
-      setTgBTCBalance(balanceNumber);
-      setError(null);
-    } catch (err: any) {
-      if (err?.response?.status === 429) {
-        console.warn("Rate limited (429) on balance fetch.");
-        setError("Rate limit exceeded – please try again later.");
-      } else {
-        console.error("Error fetching tgBTC balance:", err);
-        setError("Error fetching balance.");
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
-
+  // We only check balance when locking tgBTC - no manual refresh
 
   useEffect(() => {
     if (lnToTgInvoice) {
@@ -202,24 +167,17 @@ export default function PerformSwap() {
 
     // Always get fresh balance when attempting to lock
     setLoading(true);
+    setBalanceChecked(true);
 
     try {
       // Get fresh balance right when we need it
-
       await new Promise(resolve => setTimeout(resolve, 2000));
-
       const jettonWallet = await client.getTgBTCWalletAddressByOwner({ owner_address: initiator });
-
-      // Wait for 2 seconds before making the next API call.
       await new Promise(resolve => setTimeout(resolve, 2000));
-      
       const tgBTCWallet = await client.getTgBTCBalance({ address: jettonWallet.address });
-
       await new Promise(resolve => setTimeout(resolve, 2000));
-
-      const balanceNumber = Number(tgBTCWallet.balance) / JETTON_QUANTITY;
+      const balanceNumber = Number(tgBTCWallet.balance)
       setTgBTCBalance(balanceNumber);
-      
 
       // Check if balance is sufficient
       if (balanceNumber < (swap.amount as number)) {
@@ -347,6 +305,31 @@ export default function PerformSwap() {
     }
   };
 
+  // Function to create a test/mock invoice when needed
+  const createTestInvoice = () => {
+    if (!swap?.amount) {
+      setError("No swap amount available for test");
+      return;
+    }
+
+    // Mock up an invoice with the correct amount
+    const mockInvoice = {
+      payment_hash: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+      expiry: 300,
+      paymentRequest: "lightning_invoice_mock",
+      sections: [
+        {},
+        {},
+        { value: (swap.amount * 1000).toString() } // Match expected format
+      ]
+    };
+
+    setLnToTgDecodedInvoice(mockInvoice);
+    setLnToTgInvoice("test_invoice");
+    setError(null);
+    return mockInvoice;
+  };
+
   return (
     <div className="container">
       <div className="header">
@@ -360,13 +343,21 @@ export default function PerformSwap() {
               <div className="card">
                 <div className="balance-amount mb-2">tgBTC to Lightning Swap</div>
                 <div className="balance-amount mb-2">Swapping {swap?.amount} satoshis</div>
-                <div className="balance-amount mb-2">
-                  {/* Your tgBTC Balance: {tgBTCBalance} satoshis{" "} */}
-                  <button onClick={handleRefreshBalance} disabled={loading}>
-                    {/* Refresh */}
-                  </button>
-                </div>
-                {error && <div className="error-message mb-2">{error}</div>}
+
+                {/* Display balance info only after check */}
+                {balanceChecked && tgBTCBalance > 0 && (
+                  <div className="balance-amount mb-2">
+                    Your tgBTC Balance: {tgBTCBalance} satoshis
+                  </div>
+                )}
+
+                {/* Error message with better styling */}
+                {error && (
+                  <div className="error-message mb-2 p-3 rounded bg-red-100 border border-red-300 text-red-800">
+                    {error}
+                  </div>
+                )}
+
                 <div className="input-container">
                   <button
                     onClick={makeInvoice}
@@ -391,6 +382,29 @@ export default function PerformSwap() {
                     {loading ? "Processing..." : "Start Swap"}
                   </button>
                 </div>
+
+                {/* Test button area */}
+                {/* <div className="mt-4 pt-2 border-t border-gray-200">
+                  <button
+                    onClick={() => {
+                      if (swap?.amount) {
+                        if (!lnToTgDecodedInvoice) {
+                          // Create a test invoice if needed
+                          createTestInvoice();
+                        }
+                        // Small delay to ensure the invoice is set
+                        setTimeout(() => lockTgBTC(), 100);
+                      } else {
+                        setError("No swap amount available for test");
+                      }
+                    }}
+                    className="button bg-purple-500 hover:bg-purple-600 text-white"
+                    disabled={loading}
+                  >
+                    Test Button */}
+                {/* </button> */}
+                {/* </div> */}
+
                 {loading && (
                   <div className="transaction-container">
                     <p>Processing transaction...</p>
