@@ -308,6 +308,7 @@ export default function PerformSwap() {
   };
 
   // Function to create a test/mock invoice when needed
+  /*
   const createTestInvoice = () => {
     if (!swap?.amount) {
       setError("No swap amount available for test");
@@ -331,7 +332,7 @@ export default function PerformSwap() {
     setError(null);
     return mockInvoice;
   };
-
+  */
   return (
     <div className="container">
       <div className="header">
@@ -437,10 +438,6 @@ export default function PerformSwap() {
                       <button
                         onClick={() => {
                           if (!swap || !swap?.invoice) return;
-                          const computedHash = crypto.createHash('sha256')
-                            .update(Buffer.from(preimage, 'hex'))
-                            .digest('hex');
-                          const preimageBigInt = BigInt('0x' + preimage);
                           completeSwap(preimage);
                         }}
                         className={`button ${loading ? "loading" : ""}`}
