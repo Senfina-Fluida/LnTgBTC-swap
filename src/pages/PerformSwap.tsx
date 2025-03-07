@@ -289,6 +289,7 @@ export default function PerformSwap() {
   };
 
   const makeInvoice = async () => {
+    setLoading(true);
     try {
       const weblnProvider = await requestProvider();
       const invoice = await weblnProvider.makeInvoice({
@@ -303,6 +304,7 @@ export default function PerformSwap() {
       console.error(err);
       disconnect();
     }
+    setLoading(false);
   };
 
   // Function to create a test/mock invoice when needed
